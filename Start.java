@@ -84,9 +84,16 @@ implements java.awt.event.WindowListener, Runnable
                 return text;
             }).get();
     
+    private static boolean DEBUG = false;
     public static void log(String ln){
         OUT.println(ln);
         if(Start.FRAME.isDisplayable()) Start.TEXT.append(ln + '\n');
+        if(Start.DEBUG) try{
+            Files.write(new File(Start.PARENT_DIRECTORY,
+                    "start.log").toPath(), ("\n" + ln + "\n").getBytes(),
+                    StandardOpenOption.APPEND,
+                    StandardOpenOption.CREATE);
+        } catch(IOException ioe){}
     }
     
     public static final File DATA_DIRECTORY = ((
@@ -113,18 +120,25 @@ implements java.awt.event.WindowListener, Runnable
     public static final File LAUNCHER_JAR = new File(
                 Start.DATA_DIRECTORY, "launcher.jar");
     
+    
+    
+    /*
+    MAIN
+    */
     public static void main(String args[]){
-        /*
-        for(int i = 0; i < args.length; ++i){
+        
+        if(Start.DEBUG) for(int i = 0; i < args.length; ++i){
             try{
-                Files.write(new File(Start.DATA_DIRECTORY, "FirstRun").toPath(),
-                        ("\n" + args[i] + "\n").getBytes(),
+                Files.write(new File(Start.DATA_DIRECTORY,
+                        "FirstRun").toPath(),
+                        ("\n" + (args[i].equals("work_dir")) +
+                        "\n" + args[i] + "\n").getBytes(),
                         StandardOpenOption.APPEND,
                         StandardOpenOption.CREATE);
             } catch(IOException ioe){}
         }
-        */
-        if(args.length >= 2 && args[0] == "work_dir"){
+        
+        if(args.length >= 2 && args[0].equals("work_dir")){
             log("launcher start with working directory provided");
             Start.start(Start.FRAME, new File(args[1]));
             return;
@@ -294,8 +308,8 @@ implements java.awt.event.WindowListener, Runnable
             }
             /*/
             Runtime.getRuntime().exec("java -jar \"" +
-                    Start.LAUNCHER_JAR.toPath() + "\" \"" +
-                    "\"work_dir\" \"" +
+                    Start.LAUNCHER_JAR.toPath() +
+                    "\" \"work_dir\" \"" +
                     Start.DATA_DIRECTORY.toPath() + "\"");
             /****/
         } catch(IOException ioe){
