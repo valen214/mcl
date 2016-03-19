@@ -186,10 +186,11 @@ public class Start
             // fs: launcher.jar
             // start_jar: class or jar file
             try(FileSystem fs = FileSystems.newFileSystem(uri,
-                        new HashMap<String,String> ());
+                    new HashMap<String,String> ());
                 FileSystem start_jar = FileSystems.newFileSystem(
-                        URI.create("jar:" + Start.START.toURI()),
-                        new HashMap<String, String>())){
+                    (Start.START.isFile() ?
+                    URI.create("jar:" + Start.START.toURI()) :
+                    Start.START.toURI()), new HashMap<String, String>())){
                 Files.deleteIfExists(fs.getPath("META-INF/MOJANGCS.RSA"));
                 Files.deleteIfExists(fs.getPath("META-INF/MOJANGCS.SF"));
                 Path start_source = (Start.START.isFile() ?
