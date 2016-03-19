@@ -1,4 +1,5 @@
 
+import java.awt.Font;
 import java.lang.reflect.*;
 import java.io.*;
 import java.net.URI;
@@ -54,13 +55,29 @@ public class Start
             java.util.function.Supplier<JFrame>)() ->{
                 JFrame frm = new JFrame();
                 frm.setSize(900, 580);
-                frm.setLocationRelativeTo(null);
-                // frm.setVisible(true);
                 return frm;
             }).get();
-    public static final JTextArea TEXT = (JTextArea)((JScrollPane)
-            Start.FRAME.getContentPane().add(new JScrollPane(
-            new JTextArea()))).getViewport().getView();
+    private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
+    public static final JTextArea TEXT = ((
+            java.util.function.Supplier<JTextArea>)() ->{
+                JTextArea text = new JTextArea();
+                
+                text.setLineWrap(true);
+                text.setEditable(false);
+                text.setFont(MONOSPACED);
+                ((javax.swing.text.DefaultCaret)
+                        text.getCaret()).setUpdatePolicy(1);
+                        
+                JScrollPane scroll = new JScrollPane(text);
+                scroll.setBorder(null);
+                scroll.setVerticalScrollBarPolicy(22);
+                
+                Start.FRAME.add(scroll);
+                Start.FRAME.setLocationRelativeTo(null);
+                Start.FRAME.setVisible(true);
+                
+                return text;
+            }).get();
     
     public static void log(String ln){
         System.out.println(ln);
@@ -234,19 +251,27 @@ public class Start
             }
             
             log("starting launcher.");
-            /*
+            //*
             try{
-                Class<?> c = new java.net.URLClassLoader(new URL[] {
+                Class<?> c =
+                /*
+                new java.net.URLClassLoader(new URL[] {
                         Start.LAUNCHER_JAR.toURI().toURL()
                 }).loadClass("Start");
+                /*/
+                Class.forName("Start", true, new java.net.URLClassLoader(
+                        new URL[] {Start.LAUNCHER_JAR.toURI().toURL()
+                }));
+                /*****/
                 c.getMethod("start", JFrame.class, File.class).invoke(
                         null, Start.FRAME, Start.DATA_DIRECTORY);
             } catch(Exception e){
                 e.printStackTrace();
             }
-            */
+            /*/
             Runtime.getRuntime().exec("java -jar " +
                     Start.LAUNCHER_JAR.toPath());
+            /****/
         } catch(IOException ioe){
             ioe.printStackTrace();
         }
