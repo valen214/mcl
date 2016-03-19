@@ -114,12 +114,19 @@ implements java.awt.event.WindowListener, Runnable
                 Start.DATA_DIRECTORY, "launcher.jar");
     
     public static void main(String args[]){
+        /*
         for(int i = 0; i < args.length; ++i){
-            log(args[i]);
+            try{
+                Files.write(new File(Start.DATA_DIRECTORY, "FirstRun").toPath(),
+                        ("\n" + args[i] + "\n").getBytes(),
+                        StandardOpenOption.APPEND,
+                        StandardOpenOption.CREATE);
+            } catch(IOException ioe){}
         }
-        if(args.length >= 3 && args[1] == "work_dir"){
+        */
+        if(args.length >= 2 && args[0] == "work_dir"){
             log("launcher start with working directory provided");
-            Start.start(Start.FRAME, new File(args[2]));
+            Start.start(Start.FRAME, new File(args[1]));
             return;
         } else if(Start.START.getName().equals("launcher.jar")){
             log("launcher.jar detected, start with default config");
