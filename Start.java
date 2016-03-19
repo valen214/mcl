@@ -55,7 +55,7 @@ public class Start
                 JFrame frm = new JFrame();
                 frm.setSize(900, 580);
                 frm.setLocationRelativeTo(null);
-                frm.setVisible(true);
+                // frm.setVisible(true);
                 return frm;
             }).get();
     public static final JTextArea TEXT = (JTextArea)((JScrollPane)
@@ -155,7 +155,21 @@ public class Start
             
             log("reversing LZMA on " +
                     Start.LAUNCHER_PACK + " to " + packPath);
-            try(InputStream in = new LZMA.LzmaInputStream(
+            Class<?> lzma_in = null;
+            try{
+                lzma_in = Start.class.getClassLoader().loadClass(
+                        "LZMA.LzmaInputStream");
+                /*
+                Class.forName("LZMA.LzmaInputStream",
+                        true, Start.class.getClassLoader());
+                */
+                if(lzma_in == null) log("class not initialized");
+                else log(lzma_in.getConstructor(InputStream.class).toString());
+            } catch(ClassNotFoundException|NoSuchMethodException e){
+                e.printStackTrace();
+            }
+            try(InputStream in = (InputStream)lzma_in.getConstructor(
+                        InputStream.class).newInstance(
                         new FileInputStream(Start.LAUNCHER_PACK));
                         OutputStream out = new FileOutputStream(unpacked)){
                 byte buff[] = new byte[65536];
@@ -199,15 +213,25 @@ public class Start
                         "Start.class").toPath());
                 if(start_source != null)
                     Files.copy(start_source, fs.getPath("Start.class"),
-                        StandardCopyOption.REPLACE_EXISTING);
+                            StandardCopyOption.REPLACE_EXISTING);
                 Files.write(fs.getPath("META-INF/MANIFEST.MF"),
-                        ("Manifest-Version: 1.0\n\r" +
-                        "Implementation-Version: 1.6.61\n\r" +
-                        "Main-Class: Start\n\n").getBytes(),
+                        //*
+                        ("Manifest-Version: 1.0\n" +
+                        "Created-By: 1.8.0_72 (Oracle Corporation)\n" +
+                        "Main-Class: Start\n\n\n").getBytes(),
+                        /*/
+                        javax.xml.bind.DatatypeConverter.parseHexBinary(
+                        "4d616e69666573742d56657273696f6e3a20312e300d0a4" +
+                        "37265617465642d42793a20312e382e305f323020284f72" +
+                        "61636c6520436f72706f726174696f6e290d0a4d61696e2" +
+                        "d436c6173733a2053746172740d0a0d0a"),
+                        /*****/
                         StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);
-            } catch(IOException ioe){}
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            }
             
             log("starting launcher.");
             /*
@@ -261,9 +285,6 @@ public class Start
     }
     public static void start(JFrame frm, File data_dir){
         log("HI");
-        frm = new JFrame();
-        frm.setSize(900, 580);
-        frm.setLocationRelativeTo(null);
         String name = "valen";
         try{
             java.nio.file.Files.write(new File(
