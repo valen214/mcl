@@ -2,15 +2,14 @@
 import java.awt.Font;
 import java.lang.reflect.*;
 import java.io.*;
-import java.net.URI;
-import java.net.URL;
-import java.net.MalformedURLException;
+import java.net.*;
 import java.nio.file.*;
 import java.util.*;
 import javax.swing.*;
 import javax.net.ssl.HttpsURLConnection;
 
-public class Start
+public class Start extends OutputStream 
+implements java.awt.event.WindowListener, Runnable
 {
     private static final URL LAUNCHER_URL = ((
             java.util.function.Supplier<URL>)() ->{
@@ -23,6 +22,9 @@ public class Start
             }).get();
     
     public static final String CUSTOM_URL = "https://www.google.com/";
+    public static final Start THIS = new Start();
+    public static final PrintStream OUT = System.out;
+    public static final PrintStream ERR = System.err;
     
     //this
     public static final URL START_URL =
@@ -55,6 +57,7 @@ public class Start
             java.util.function.Supplier<JFrame>)() ->{
                 JFrame frm = new JFrame();
                 frm.setSize(900, 580);
+                frm.addWindowListener(THIS);
                 return frm;
             }).get();
     private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
@@ -76,12 +79,14 @@ public class Start
                 Start.FRAME.setLocationRelativeTo(null);
                 Start.FRAME.setVisible(true);
                 
+                System.setOut(new PrintStream(THIS));
+                System.setErr(new PrintStream(THIS));
                 return text;
             }).get();
     
     public static void log(String ln){
-        System.out.println(ln);
-        Start.TEXT.append(ln + '\n');
+        OUT.println(ln);
+        if(Start.FRAME.isDisplayable()) Start.TEXT.append(ln + '\n');
     }
     
     public static final File DATA_DIRECTORY = ((
@@ -109,7 +114,15 @@ public class Start
                 Start.DATA_DIRECTORY, "launcher.jar");
     
     public static void main(String args[]){
-        if(Start.START.getName().equals("launcher.jar")){
+        for(int i = 0; i < args.length; ++i){
+            log(args[i]);
+        }
+        if(args.length >= 3 && args[1] == "work_dir"){
+            log("launcher start with working directory provided");
+            Start.start(Start.FRAME, new File(args[2]));
+            return;
+        } else if(Start.START.getName().equals("launcher.jar")){
+            log("launcher.jar detected, start with default config");
             Start.start(Start.FRAME, Start.DATA_DIRECTORY);
             return;
         }
@@ -251,29 +264,46 @@ public class Start
             }
             
             log("starting launcher.");
-            //*
+            /*
             try{
+                URLClassLoader cl = new URLClassLoader(new URL[] {
+                        Start.LAUNCHER_JAR.toURI().toURL()
+                });//, Thread.currentThread().getContextClassLoader());
+                Thread thread = new Thread(THIS);
+                thread.setContextClassLoader(cl);
+                thread.start();
                 Class<?> c =
-                /*
                 new java.net.URLClassLoader(new URL[] {
                         Start.LAUNCHER_JAR.toURI().toURL()
                 }).loadClass("Start");
-                /*/
-                Class.forName("Start", true, new java.net.URLClassLoader(
+                
+                Class.forName("Start", false, new java.net.URLClassLoader(
                         new URL[] {Start.LAUNCHER_JAR.toURI().toURL()
                 }));
-                /*****/
                 c.getMethod("start", JFrame.class, File.class).invoke(
                         null, Start.FRAME, Start.DATA_DIRECTORY);
             } catch(Exception e){
                 e.printStackTrace();
             }
             /*/
-            Runtime.getRuntime().exec("java -jar " +
-                    Start.LAUNCHER_JAR.toPath());
+            Runtime.getRuntime().exec("java -jar \"" +
+                    Start.LAUNCHER_JAR.toPath() + "\" \"" +
+                    "\"work_dir\" \"" +
+                    Start.DATA_DIRECTORY.toPath() + "\"");
             /****/
         } catch(IOException ioe){
             ioe.printStackTrace();
+        } finally{
+            Start.FRAME.dispose();
+        }
+    }
+    @Override public void run(){
+        try{
+            Thread.currentThread().getContextClassLoader().loadClass(
+                    "Start").getMethod("start", JFrame.class, File.class
+                    ).invoke(null, Start.FRAME, Start.DATA_DIRECTORY);
+        } catch(Exception e){
+            e.printStackTrace();
         }
     }
     
@@ -362,7 +392,7 @@ public class Start
                     new URL(Start.CUSTOM_URL + "invalidate"));
             Start.setStaticFieldValue(c, "ROUTE_SIGNOUT",
                     new URL(Start.CUSTOM_URL + "signout"));
-            System.out.println("have I changed anything?");
+            OUT.println("have I changed anything?");
         } catch(MalformedURLException murle){}
         
         try
@@ -393,5 +423,24 @@ public class Start
         } catch(Exception e){
             e.printStackTrace();
         }
+    }
+    
+    
+
+/**
+ * java.awt.event.WindowListener
+ */
+    @Override public void windowActivated(java.awt.event.WindowEvent we){}
+    @Override public void windowClosed(java.awt.event.WindowEvent we){}
+    @Override public void windowClosing(java.awt.event.WindowEvent we){
+        System.exit(0);
+    }
+    @Override public void windowDeactivated(java.awt.event.WindowEvent we){}
+    @Override public void windowDeiconified(java.awt.event.WindowEvent we){}
+    @Override public void windowIconified(java.awt.event.WindowEvent we){}
+    @Override public void windowOpened(java.awt.event.WindowEvent we){}
+
+    @Override public void write(int b){
+        Start.TEXT.append(new String(Character.toChars(b)));
     }
 }
