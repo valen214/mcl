@@ -45,13 +45,19 @@ implements java.awt.event.WindowListener, Runnable
             (Start.START.isFile() ?
             Start.START.getParentFile() : START);
     // config
-    public static final File CONFIG = new File(
-            Start.PARENT_DIRECTORY, "mc_launcher_profiles.xml");
-    public static final String CONFIG_CONTENT = ((
-            java.util.function.Supplier<String>)() ->{
-                try{ return new String(
-                    java.nio.file.Files.readAllBytes(Start.CONFIG.toPath()));
-                } catch(IOException ioe){return null;}}).get();
+    public static final Map<String, String> CONFIG = ((
+            java.util.function.Supplier<Map<String, String>>)() ->{
+                Map<String, String> map = new HashMap<String, String> ();
+                try{
+                    for(String line : Files.readAllLines(
+                            new File(Start.PARENT_DIRECTORY,
+                            "mc_launcher_profiles.ini").toPath())){
+                        String elem[] = line.split("=", 2);
+                        map.put(elem[0].toLowerCase(), elem[1]);
+                    }
+                } catch(IOException ioe){}
+                return map;
+            }).get();
     
     public static final JFrame FRAME = ((
             java.util.function.Supplier<JFrame>)() ->{
@@ -84,7 +90,7 @@ implements java.awt.event.WindowListener, Runnable
                 return text;
             }).get();
     
-    private static boolean DEBUG = false;
+    private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
     public static void log(String ln){
         OUT.println(ln);
         if(Start.FRAME.isDisplayable()) Start.TEXT.append(ln + '\n');
@@ -98,20 +104,25 @@ implements java.awt.event.WindowListener, Runnable
     
     public static final File DATA_DIRECTORY = ((
             java.util.function.Supplier<File>)() ->{
-                String osName = System.getProperty("os.name").toLowerCase();
-                String userHome = System.getProperty("user.home", ".");
                 File defaultDirectory = null;
-                if(osName.matches("(linux|unix)")){
-                    defaultDirectory = new File(userHome, ".minecraft/");
-                } else if(osName.contains("mac")){
-                    defaultDirectory = new File(userHome,
-                            "Library/Application Support/minecraft/");
-                } else if(osName.contains("win")){
-                    String appData = System.getenv("APPDATA");
-                    defaultDirectory = new File((appData != null ?
-                            appData : userHome), ".minecraft/");
+                if(Start.CONFIG.get("work_dir") != null){
+                    defaultDirectory = new File(Start.CONFIG.get("work_dir"));
                 } else{
-                    defaultDirectory = new File(userHome, "minecraft/");
+                    String userHome = System.getProperty("user.home", ".");
+                    String osName = System.getProperty(
+                            "os.name").toLowerCase();
+                    if(osName.matches("(linux|unix)")){
+                        defaultDirectory = new File(userHome, ".minecraft/");
+                    } else if(osName.contains("mac")){
+                        defaultDirectory = new File(userHome,
+                                "Library/Application Support/minecraft/");
+                    } else if(osName.contains("win")){
+                        String appData = System.getenv("APPDATA");
+                        defaultDirectory = new File((appData != null ?
+                                appData : userHome), ".minecraft/");
+                    } else{
+                        defaultDirectory = new File(userHome, "minecraft/");
+                    }
                 }
                 return defaultDirectory;
             }).get();
@@ -138,13 +149,16 @@ implements java.awt.event.WindowListener, Runnable
             } catch(IOException ioe){}
         }
         
-        if(args.length >= 2 && args[0].equals("work_dir")){
-            log("launcher start with working directory provided");
-            Start.start(Start.FRAME, new File(args[1]));
+        if(args.length >= 2 &&
+                args[0].equals("work_dir") &&
+                args[2].equals("name")){
+            log("launcher start with working directory and name provided");
+            Start.start(Start.FRAME, new File(args[1]), args[3]);
             return;
         } else if(Start.START.getName().equals("launcher.jar")){
             log("launcher.jar detected, start with default config");
-            Start.start(Start.FRAME, Start.DATA_DIRECTORY);
+            Start.start(Start.FRAME, Start.PARENT_DIRECTORY,
+                    Start.getName(Start.PARENT_DIRECTORY));
             return;
         }
         try{
@@ -310,13 +324,50 @@ implements java.awt.event.WindowListener, Runnable
             Runtime.getRuntime().exec("java -jar \"" +
                     Start.LAUNCHER_JAR.toPath() +
                     "\" \"work_dir\" \"" +
-                    Start.DATA_DIRECTORY.toPath() + "\"");
+                    Start.DATA_DIRECTORY.toPath() +
+                    "\" \"name\" \"" + Start.getName(
+                    Start.DATA_DIRECTORY) + "\"");
             /****/
         } catch(IOException ioe){
             ioe.printStackTrace();
         } finally{
             Start.FRAME.dispose();
         }
+    }
+    private static final String getName(File data_dir){
+        String name = CONFIG.get("name");
+        File first = new File(data_dir, "FirstRun");
+        if(name == null){
+            try{
+                name = new String(Files.readAllBytes(first.toPath()));
+            } catch(IOException ioe){
+                if(!(ioe instanceof FileNotFoundException))
+                    ioe.printStackTrace();
+            }
+        }
+        if((name == null) || (name.isEmpty())){
+            name = JOptionPane.showInputDialog(
+                    null, "input your name:", "name input",
+                    JOptionPane.PLAIN_MESSAGE).replaceAll(
+                    "[^\\p{L}\\p{Nd}]+", "");
+            if((name == null) || (name.isEmpty())){
+                name="explorer";
+            } else{
+                //*
+                try{
+                    Files.write(first.toPath(), name.getBytes(),
+                            StandardOpenOption.WRITE,
+                            StandardOpenOption.CREATE_NEW,
+                            StandardOpenOption.SPARSE);
+                } catch(IOException ioe){}
+                /*/
+                first.createNewFile();
+                try(OutputStream out = new FileOutputStream(first))
+                    out.write(name.getBytes());
+                /*****/
+            }
+        }
+        return name;
     }
     @Override public void run(){
         try{
@@ -359,9 +410,8 @@ implements java.awt.event.WindowListener, Runnable
         Start.CLIENT_TOKEN[0] = "87584590-7ab6-40e7-9c0e-5f5a8501937a";
         Start.ACCESS_TOKEN[0] = "aff3101b2d8d43bbb42fab2e6e993e28";
     }
-    public static void start(JFrame frm, File data_dir){
+    public static void start(JFrame frm, File data_dir, String name){
         log("HI");
-        String name = "valen";
         try{
             java.nio.file.Files.write(new File(
                     data_dir, "launcher_profiles.json").toPath(),
