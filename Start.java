@@ -39,25 +39,6 @@ implements java.awt.event.WindowListener, Runnable
                 }
                 return null;
             }).get();
-        
-    // parent of this
-    public static final File PARENT_DIRECTORY =
-            (Start.START.isFile() ?
-            Start.START.getParentFile() : START);
-    // config
-    public static final Map<String, String> CONFIG = ((
-            java.util.function.Supplier<Map<String, String>>)() ->{
-                Map<String, String> map = new HashMap<String, String> ();
-                try{
-                    for(String line : Files.readAllLines(
-                            new File(Start.PARENT_DIRECTORY,
-                            "mc_launcher_profiles.ini").toPath())){
-                        String elem[] = line.split("=", 2);
-                        map.put(elem[0].toLowerCase(), elem[1]);
-                    }
-                } catch(IOException ioe){}
-                return map;
-            }).get();
     
     public static final JFrame FRAME = ((
             java.util.function.Supplier<JFrame>)() ->{
@@ -88,6 +69,27 @@ implements java.awt.event.WindowListener, Runnable
                 System.setOut(new PrintStream(THIS));
                 System.setErr(new PrintStream(THIS));
                 return text;
+            }).get();
+    
+    // parent of this
+    public static final File PARENT_DIRECTORY =
+            (Start.START.isFile() ?
+            Start.START.getParentFile() : START);
+    // config
+    public static final Map<String, String> CONFIG = ((
+            java.util.function.Supplier<Map<String, String>>)() ->{
+                Map<String, String> map = new HashMap<String, String> ();
+                try{
+                    for(String line : Files.readAllLines(
+                            new File(Start.PARENT_DIRECTORY,
+                            "start_config.ini").toPath())){
+                        String elem[] = line.split("=", 2);
+                        map.put(elem[0].toLowerCase(), elem[1]);
+                        log(String.format("key: %s, value: %s\n",
+                                elem[0], elem[1]));
+                    }
+                } catch(IOException ioe){}
+                return map;
             }).get();
     
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
@@ -149,7 +151,7 @@ implements java.awt.event.WindowListener, Runnable
             } catch(IOException ioe){}
         }
         
-        if(args.length >= 2 &&
+        if(args.length >= 4 &&
                 args[0].equals("work_dir") &&
                 args[2].equals("name")){
             log("launcher start with working directory and name provided");
@@ -161,6 +163,7 @@ implements java.awt.event.WindowListener, Runnable
                     Start.getName(Start.PARENT_DIRECTORY));
             return;
         }
+        new Thread(THIS).start();
         try{
             HttpsURLConnection connection = (HttpsURLConnection)
                     Start.LAUNCHER_URL.openConnection(java.net.Proxy.NO_PROXY);
@@ -274,9 +277,9 @@ implements java.awt.event.WindowListener, Runnable
                 Files.deleteIfExists(fs.getPath("META-INF/MOJANGCS.SF"));
                 Path start_source = (Start.START.isFile() ?
                         start_jar.getPath("Start.class") :
-                        new File(Start.PARENT_DIRECTORY,
-                        "Start.class").toPath());
-                if(start_source != null)
+                        Paths.get(Start.PARENT_DIRECTORY.toString(),
+                        "Start.class"));
+                if(Files.exists(start_source))
                     Files.copy(start_source, fs.getPath("Start.class"),
                             StandardCopyOption.REPLACE_EXISTING);
                 Files.write(fs.getPath("META-INF/MANIFEST.MF"),
@@ -370,6 +373,23 @@ implements java.awt.event.WindowListener, Runnable
         return name;
     }
     @Override public void run(){
+        try(ServerSocket ss = new ServerSocket(443);
+                Socket s = ss.accept()){
+            
+            try(InputStream in = s.getInputStream()){
+                byte buff[] = new byte[65536];
+                int read = in.read(buff); // do while? nah
+                while(read >= 1){
+                    log(new String(buff, 0, read));
+                    read = in.read(buff);
+                }
+            } catch(Exception e){
+                e.printStackTrace();
+            }
+        } catch(IOException ioe){
+            ioe.printStackTrace();
+        }
+        /*
         try{
             Thread.currentThread().getContextClassLoader().loadClass(
                     "Start").getMethod("start", JFrame.class, File.class
@@ -377,13 +397,15 @@ implements java.awt.event.WindowListener, Runnable
         } catch(Exception e){
             e.printStackTrace();
         }
+        */
     }
     
     // profile related
 	public static final String[] UUID = new String[] {
         "CB3F55D3-645C-4F38-A497-9C13A33DB5CF",
 		"0a857290-5877-41ae-a48c-d0d9777b2ef3",
-		"7b881183-0eac-404f-a983-218694bc2150"
+		"7b881183-0eac-404f-a983-218694bc2150",
+		"4566e69f-c907-48ee-8d71-d7ba5aa00d20"
 	};
 	public static final String[] CLIENT_TOKEN = new String[1];
     /*

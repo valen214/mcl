@@ -1,0 +1,37 @@
+{
+  "profiles": {
+    "(Default)": {
+      "name": "(Default)",
+      "gameDir": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
+      "javaDir": "C:\\Program Files\\Java\\jre1.8.0_20\\bin\\javaw.exe",
+      "javaArgs": "-Xmx1G -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-UseAdaptiveSizePolicy -Xmn128M",
+      "resolution": {
+        "width": 854,
+        "height": 480
+      },
+      "allowedReleaseTypes": [
+        "old_beta",
+        "release",
+        "snapshot",
+        "old_alpha"
+      ],
+      "launcherVisibilityOnGameClose": "keep the launcher open"
+    }
+  },
+  "selectedProfile": "(Default)",
+  "clientToken": "87584590-7ab6-40e7-9c0e-5f5a8501937a",
+  "authenticationDatabase": {
+    "0a857290587741aea48cd0d9777b2ef3": {
+      "displayName": "valen",
+      "accessToken": "aff3101b2d8d43bbb42fab2e6e993e28",
+      "userid": "custom@custom.com",
+      "uuid": "0a857290-5877-41ae-a48c-d0d9777b2ef3",
+      "username": "custom@custom.com"
+    }
+  },
+  "selectedUser": "0a857290587741aea48cd0d9777b2ef3",
+  "launcherVersion": {
+    "name": "1.5.3",
+    "format": 17
+  }
+}
