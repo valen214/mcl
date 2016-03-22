@@ -9,7 +9,8 @@ import javax.swing.*;
 import javax.net.ssl.HttpsURLConnection;
 
 /*
-extends OutputStream removed as implementation of java.net.Proxy is required
+extends OutputStream removed as implementation of
+java.net.Proxy is required
 using invocationhandler for the implementation of redireting system.out
 */
 
@@ -35,7 +36,8 @@ implements java.awt.event.WindowListener, Runnable
     
     //this
     public static final URL START_URL =
-            Start.class.getProtectionDomain().getCodeSource().getLocation();
+            Start.class.getProtectionDomain()
+            .getCodeSource().getLocation();
     // this
     public static final File START = ((
             java.util.function.Supplier<File>)() ->{
@@ -112,6 +114,7 @@ implements java.awt.event.WindowListener, Runnable
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
     public static void log(Object ln){
         OUT.println(ln);
+        if(ln == null) return;
         if(Start.FRAME.isDisplayable()){
             Start.TEXT.append(ln.toString() + '\n');
         }
@@ -128,13 +131,15 @@ implements java.awt.event.WindowListener, Runnable
             java.util.function.Supplier<File>)() ->{
                 File defaultDirectory = null;
                 if(Start.CONFIG.get("work_dir") != null){
-                    defaultDirectory = new File(Start.CONFIG.get("work_dir"));
+                    defaultDirectory =
+                            new File(Start.CONFIG.get("work_dir"));
                 } else{
                     String userHome = System.getProperty("user.home", ".");
                     String osName = System.getProperty(
                             "os.name").toLowerCase();
                     if(osName.matches("(linux|unix)")){
-                        defaultDirectory = new File(userHome, ".minecraft/");
+                        defaultDirectory =
+                                new File(userHome, ".minecraft/");
                     } else if(osName.contains("mac")){
                         defaultDirectory = new File(userHome,
                                 "Library/Application Support/minecraft/");
@@ -143,7 +148,8 @@ implements java.awt.event.WindowListener, Runnable
                         defaultDirectory = new File((appData != null ?
                                 appData : userHome), ".minecraft/");
                     } else{
-                        defaultDirectory = new File(userHome, "minecraft/");
+                        defaultDirectory =
+                                new File(userHome, "minecraft/");
                     }
                 }
                 return defaultDirectory;
@@ -152,6 +158,8 @@ implements java.awt.event.WindowListener, Runnable
                 Start.DATA_DIRECTORY, "launcher.pack.lzma");
     public static final File LAUNCHER_JAR = new File(
                 Start.DATA_DIRECTORY, "launcher.jar");
+    
+    private static ServerSocket LOCAL_SERVER = null;
     
     
     
@@ -183,7 +191,12 @@ implements java.awt.event.WindowListener, Runnable
                     Start.getName(Start.PARENT_DIRECTORY));
             return;
         }
-        new Thread(THIS).start();
+        try{
+            new ServerSocket(65535, 5);
+        } catch(BindException be){
+            log("launcher already started");
+            Start.exit();
+        } catch(IOException ioe){}
         try{
             HttpsURLConnection connection = (HttpsURLConnection)
                     Start.LAUNCHER_URL.openConnection(
@@ -274,7 +287,8 @@ implements java.awt.event.WindowListener, Runnable
             try(java.util.jar.JarOutputStream jar_out =
                     new java.util.jar.JarOutputStream(
                     new FileOutputStream(Start.LAUNCHER_JAR))){
-                java.util.jar.Pack200.newUnpacker().unpack(unpacked, jar_out);
+                java.util.jar.Pack200.newUnpacker()
+                        .unpack(unpacked, jar_out);
             } catch(Exception e){
                 e.printStackTrace();
             }
@@ -318,6 +332,9 @@ implements java.awt.event.WindowListener, Runnable
                         StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);
+            } catch(FileSystemException fse){
+                log("launcher.jar already started");
+                exit();
             } catch(IOException ioe){
                 ioe.printStackTrace();
             }
@@ -355,8 +372,7 @@ implements java.awt.event.WindowListener, Runnable
         } catch(IOException ioe){
             ioe.printStackTrace();
         } finally{
-            Start.FRAME.dispose();
-            System.exit(0);
+            Start.exit();
         }
     }
     private static final String getName(File data_dir){
@@ -397,14 +413,36 @@ implements java.awt.event.WindowListener, Runnable
     @Override public void run(){
         log("server socket listening");
         try{
-            try(ServerSocket ss = new ServerSocket(443);
-                    Socket s = ss.accept()){
-                
-                try(BufferedReader in = new BufferedReader(
-                        new InputStreamReader(s.getInputStream()))){
+            Start.LOCAL_SERVER = new ServerSocket(8080);
+        } catch(IOException ioe){
+            ioe.printStackTrace();
+        }
+        while(Start.LOCAL_SERVER != null){
+            try{
+                // throws IOException
+                try(Socket s = Start.LOCAL_SERVER.accept();
+                        InputStream in = s.getInputStream();
+                        OutputStream out = s.getOutputStream()){
                     log("start reading");
-                    String ln = in.readLine();
                     
+                    String req = getInputString(in);
+                    log(req);
+                    Map<String, String> request =
+                            new HashMap<String, String> ();
+                    for(String line : req.split("\\r?\\n")){
+                        String pair[] = line.split(" ", 2);
+                        request.put(pair[0], pair[1]);
+                    }
+                    try(Socket ser =
+                            new Socket(request.get("Host:"), 443);
+                            OutputStream out_ser = ser.getOutputStream();
+                            InputStream in_ser = ser.getInputStream()){
+                        out_ser.write(req.getBytes(), 0, req.length());
+                        out_ser.flush();
+                        String res = getInputString(in_ser);
+                        out.write(res.getBytes(), 0, res.length());
+                        out.flush();
+                    }
                     /*
                     byte buff[] = new byte[65536];
                     int read = in.read(buff); // do while? nah
@@ -413,17 +451,17 @@ implements java.awt.event.WindowListener, Runnable
                         read = in.read(buff);
                     }
                     */
-                } catch(Exception e){
-                    e.printStackTrace();
+                    s.close();
+                    in.close();
+                    out.close();
                 }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            } catch(NullPointerException npe){
+                log("empty request");
             }
-        } catch(BindException be){
-            log("launcher already running!");
-            log("program exit");
-            System.exit(0);
-        } catch(IOException ioe){
-            ioe.printStackTrace();
         }
+        
         /*
         try{
             Thread.currentThread().getContextClassLoader().loadClass(
@@ -433,6 +471,11 @@ implements java.awt.event.WindowListener, Runnable
             e.printStackTrace();
         }
         */
+    }
+    public static String getInputString(InputStream in){
+        try(Scanner scan = new Scanner(in).useDelimiter("\\A")){
+            return (scan.hasNext() ? scan.next() : null);
+        }
     }
     
     // profile related
@@ -468,32 +511,39 @@ implements java.awt.event.WindowListener, Runnable
         Start.ACCESS_TOKEN[0] = "aff3101b2d8d43bbb42fab2e6e993e28";
     }
     public static void start(JFrame frm, File data_dir, String name){
-        log("HI");
+        log("programme start at " + data_dir.getPath());
+        new Thread(THIS).start();
         try{
             java.nio.file.Files.write(new File(
                     data_dir, "launcher_profiles.json").toPath(),
                     ("{\n  \"profiles\": {\n" +
-                    "    \"(Default)\": {\n      \"name\": \"(Default)\"\n" +
-                    "    }\n  },\n  \"selectedProfile\": \"(Default)\",\n" +
-                    "  \"clientToken\": \"" + Start.CLIENT_TOKEN[0] +"\",\n" +
+                    "    \"(Default)\": {\n" +
+                    "      \"name\": \"(Default)\"\n" +
+                    "    }\n  },\n  \"selectedProfile\": " +
+                    "\"(Default)\",\n  \"clientToken\": \"" +
+                    Start.CLIENT_TOKEN[0] +"\",\n" +
                     "  \"authenticationDatabase\": {\n" +
-                    "    \"" + Start.UUID[0].replace("-", "") + "\": {\n" +
+                    "    \"" + Start.UUID[0].replace("-", "") +
+                    "\": {\n" +
                     "      \"displayName\": \"" + name + "\",\n" +
                     "      \"accessToken\": \"" + Start.ACCESS_TOKEN[0] + 
                     "\",\n      \"userid\": \"info@cutom.com\",\n" +
                     "      \"uuid\": \"" + Start.UUID[0] + "\",\n" +
                     "      \"username\": \"cstmpublic@gmail.com\"\n" +
                     "    }\n  },\n" +
-                    "  \"selectedUser\": \"" + Start.UUID[0].replace("-", "") +
+                    "  \"selectedUser\": \"" +
+                    Start.UUID[0].replace("-", "") +
                     "\",\n  \"launcherVersion\": {\n    \"name\": \"" + 
-                    net.minecraft.launcher.LauncherConstants.class.getPackage()
-                    .getImplementationVersion() + "\",\n    \"format\": " +
-                    net.minecraft.launcher.LauncherConstants.VERSION_FORMAT +
+                    net.minecraft.launcher.LauncherConstants.class
+                    .getPackage().getImplementationVersion() +
+                    "\",\n    \"format\": " + net.minecraft.launcher
+                    .LauncherConstants.VERSION_FORMAT +
                     "\n  }\n}").getBytes(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
         } catch(IOException ioe){}
+        /*
         try{
             Class<?> c = null;
             // session service modification
@@ -526,21 +576,33 @@ implements java.awt.event.WindowListener, Runnable
                     "https://image-uploader-xvalen214x.c9users.io");
             Start.setStaticFieldValue(c, "SEARCH_PAGE_URL",
                     "https://image-uploader-xvalen214x.c9users.io");
-            OUT.println("have I changed anything?");
+            log("have I changed anything?");
         } catch(MalformedURLException murle){}
+        /*****/
         
+        for(int i = 0; i < 5 && Start.LOCAL_SERVER == null; ++i){
+            try{
+                Thread.sleep(500);
+            } catch(InterruptedException ie){}
+        }
         net.minecraft.launcher.Launcher launcher = null;
         try
         {
+            java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
+            if(Start.LOCAL_SERVER != null){
+                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                        Start.LOCAL_SERVER.getLocalSocketAddress());
+            }
             launcher =
                     new net.minecraft.launcher.Launcher(frm, data_dir,
-                    java.net.Proxy.NO_PROXY, null, new String[0],
+                    proxy, null, new String[0],
                     net.minecraft.launcher.LauncherConstants.
                     SUPER_COOL_BOOTSTRAP_VERSION);
         } catch(Exception e){
-            System.err.println("Unable to start: ");
+            log("Unable to start: ");
             e.printStackTrace();
             e.fillInStackTrace().printStackTrace();
+            exit();
         }
         log("launcher started");
     }
@@ -551,9 +613,11 @@ implements java.awt.event.WindowListener, Runnable
             field.setAccessible(true);
             Field modifiers = Field.class.getDeclaredField("modifiers");
             modifiers.setAccessible(true);
-            modifiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+            modifiers.setInt(field,
+                    field.getModifiers() & ~Modifier.FINAL);
             field.set(null, value);
-            modifiers.setInt(field, field.getModifiers() & Modifier.FINAL);
+            modifiers.setInt(field,
+                    field.getModifiers() & Modifier.FINAL);
             modifiers.setAccessible(false);
             field.setAccessible(false);
         } catch(Exception e){
@@ -571,8 +635,10 @@ implements java.awt.event.WindowListener, Runnable
     @Override public void windowClosing(java.awt.event.WindowEvent we){
         System.exit(0);
     }
-    @Override public void windowDeactivated(java.awt.event.WindowEvent we){}
-    @Override public void windowDeiconified(java.awt.event.WindowEvent we){}
+    @Override public void windowDeactivated(
+                java.awt.event.WindowEvent we){}
+    @Override public void windowDeiconified(
+                java.awt.event.WindowEvent we){}
     @Override public void windowIconified(java.awt.event.WindowEvent we){}
     @Override public void windowOpened(java.awt.event.WindowEvent we){}
 
@@ -590,4 +656,12 @@ implements java.awt.event.WindowListener, Runnable
         Start.TEXT.append(new String(Character.toChars(b)));
     }
 //*/
+
+    private static void exit(){
+        log("programme exit");
+        if(Start.FRAME != null) Start.FRAME.dispose();
+        if(Start.LOCAL_SERVER != null) try{ Start.LOCAL_SERVER.close();
+        } catch(IOException ioe){}
+        System.exit(0);
+    }
 }
