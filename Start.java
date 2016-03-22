@@ -8,8 +8,14 @@ import java.util.*;
 import javax.swing.*;
 import javax.net.ssl.HttpsURLConnection;
 
-public class Start extends OutputStream 
+/*
+extends OutputStream removed as implementation of java.net.Proxy is required
+using invocationhandler for the implementation of redireting system.out
+*/
+
+public class Start extends OutputStream
 implements java.awt.event.WindowListener, Runnable
+// , InvocationHandler
 {
     private static final URL LAUNCHER_URL = ((
             java.util.function.Supplier<URL>)() ->{
@@ -21,7 +27,8 @@ implements java.awt.event.WindowListener, Runnable
                 return null;
             }).get();
     
-    public static final String CUSTOM_URL = "https://www.google.com/";
+    public static final String CUSTOM_URL =
+            "https://image-uploader-xvalen214x.c9users.io/";
     public static final Start THIS = new Start();
     public static final PrintStream OUT = System.out;
     public static final PrintStream ERR = System.err;
@@ -66,8 +73,18 @@ implements java.awt.event.WindowListener, Runnable
                 Start.FRAME.setLocationRelativeTo(null);
                 Start.FRAME.setVisible(true);
                 
-                System.setOut(new PrintStream(THIS));
-                System.setErr(new PrintStream(THIS));
+                /*
+                System.setOut((PrintStream)
+                        java.lang.reflect.Proxy.newProxyInstance(
+                        PrintStream.class.getClassLoader(),
+                        new Class[] { PrintStream.class }, THIS
+                ));
+                System.setErr((PrintStream)
+                        java.lang.reflect.Proxy.newProxyInstance(
+                        PrintStream.class.getClassLoader(),
+                        new Class[] { PrintStream.class }, THIS
+                ));
+                */
                 return text;
             }).get();
     
@@ -93,12 +110,15 @@ implements java.awt.event.WindowListener, Runnable
             }).get();
     
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
-    public static void log(String ln){
+    public static void log(Object ln){
         OUT.println(ln);
-        if(Start.FRAME.isDisplayable()) Start.TEXT.append(ln + '\n');
+        if(Start.FRAME.isDisplayable()){
+            Start.TEXT.append(ln.toString() + '\n');
+        }
         if(Start.DEBUG) try{
             Files.write(new File(Start.PARENT_DIRECTORY,
-                    "start.log").toPath(), ("\n" + ln + "\n").getBytes(),
+                    "start.log").toPath(),
+                    ("\n" + ln.toString() + "\n").getBytes(),
                     StandardOpenOption.APPEND,
                     StandardOpenOption.CREATE);
         } catch(IOException ioe){}
@@ -166,7 +186,8 @@ implements java.awt.event.WindowListener, Runnable
         new Thread(THIS).start();
         try{
             HttpsURLConnection connection = (HttpsURLConnection)
-                    Start.LAUNCHER_URL.openConnection(java.net.Proxy.NO_PROXY);
+                    Start.LAUNCHER_URL.openConnection(
+                        java.net.Proxy.NO_PROXY);
             connection.setUseCaches(false);
             connection.setDefaultUseCaches(false);
             connection.setRequestProperty("Cache-Control",
@@ -232,7 +253,7 @@ implements java.awt.event.WindowListener, Runnable
                         true, Start.class.getClassLoader());
                 */
                 if(lzma_in == null) log("class not initialized");
-                else log(lzma_in.getConstructor(InputStream.class).toString());
+                else log(lzma_in.getConstructor(InputStream.class));
             } catch(ClassNotFoundException|NoSuchMethodException e){
                 e.printStackTrace();
             }
@@ -335,6 +356,7 @@ implements java.awt.event.WindowListener, Runnable
             ioe.printStackTrace();
         } finally{
             Start.FRAME.dispose();
+            System.exit(0);
         }
     }
     private static final String getName(File data_dir){
@@ -344,7 +366,7 @@ implements java.awt.event.WindowListener, Runnable
             try{
                 name = new String(Files.readAllBytes(first.toPath()));
             } catch(IOException ioe){
-                if(!(ioe instanceof FileNotFoundException))
+                if(!(ioe instanceof NoSuchFileException))
                     ioe.printStackTrace();
             }
         }
@@ -373,19 +395,32 @@ implements java.awt.event.WindowListener, Runnable
         return name;
     }
     @Override public void run(){
-        try(ServerSocket ss = new ServerSocket(443);
-                Socket s = ss.accept()){
-            
-            try(InputStream in = s.getInputStream()){
-                byte buff[] = new byte[65536];
-                int read = in.read(buff); // do while? nah
-                while(read >= 1){
-                    log(new String(buff, 0, read));
-                    read = in.read(buff);
+        log("server socket listening");
+        try{
+            try(ServerSocket ss = new ServerSocket(443);
+                    Socket s = ss.accept()){
+                
+                try(BufferedReader in = new BufferedReader(
+                        new InputStreamReader(s.getInputStream()))){
+                    log("start reading");
+                    String ln = in.readLine();
+                    
+                    /*
+                    byte buff[] = new byte[65536];
+                    int read = in.read(buff); // do while? nah
+                    while(read >= 1){
+                        log(new String(buff, 0, read));
+                        read = in.read(buff);
+                    }
+                    */
+                } catch(Exception e){
+                    e.printStackTrace();
                 }
-            } catch(Exception e){
-                e.printStackTrace();
             }
+        } catch(BindException be){
+            log("launcher already running!");
+            log("program exit");
+            System.exit(0);
         } catch(IOException ioe){
             ioe.printStackTrace();
         }
@@ -485,12 +520,19 @@ implements java.awt.event.WindowListener, Runnable
                     new URL(Start.CUSTOM_URL + "invalidate"));
             Start.setStaticFieldValue(c, "ROUTE_SIGNOUT",
                     new URL(Start.CUSTOM_URL + "signout"));
+            c = com.mojang.authlib.yggdrasil
+                    .YggdrasilGameProfileRepository.class;
+            Start.setStaticFieldValue(c, "BASE_URL",
+                    "https://image-uploader-xvalen214x.c9users.io");
+            Start.setStaticFieldValue(c, "SEARCH_PAGE_URL",
+                    "https://image-uploader-xvalen214x.c9users.io");
             OUT.println("have I changed anything?");
         } catch(MalformedURLException murle){}
         
+        net.minecraft.launcher.Launcher launcher = null;
         try
         {
-            net.minecraft.launcher.Launcher launcher =
+            launcher =
                     new net.minecraft.launcher.Launcher(frm, data_dir,
                     java.net.Proxy.NO_PROXY, null, new String[0],
                     net.minecraft.launcher.LauncherConstants.
@@ -500,6 +542,7 @@ implements java.awt.event.WindowListener, Runnable
             e.printStackTrace();
             e.fillInStackTrace().printStackTrace();
         }
+        log("launcher started");
     }
     public static void setStaticFieldValue(
             Class<?> c, String name, Object value){
@@ -533,7 +576,18 @@ implements java.awt.event.WindowListener, Runnable
     @Override public void windowIconified(java.awt.event.WindowEvent we){}
     @Override public void windowOpened(java.awt.event.WindowEvent we){}
 
+/* InvocationHandler
+// failed as this method only allow interfaces
+    @Override public Object invoke(
+            Object proxy, Method method, Object[] args) throws Throwable {
+        OUT.println("HELLO");
+        return method.invoke(Start.OUT, args);
+    }
+*/
+//* OutputStream
     @Override public void write(int b){
+        Start.OUT.print(new String(Character.toChars(b)));
         Start.TEXT.append(new String(Character.toChars(b)));
     }
+//*/
 }
