@@ -410,6 +410,20 @@ implements java.awt.event.WindowListener, Runnable
         }
         return name;
     }
+    
+    
+    
+    
+    
+/**
+ * run
+ */
+    private static final Map<String, String> HANDLER =
+            new HashMap<String, String> ();
+    static{
+        HANDLER.put("launchermeta.mojang.com", String.join("\\r\\n",
+                "HTTP/1.1 200 OK", ""));
+    }
     @Override public void run(){
         log("server socket listening");
         try{
@@ -417,50 +431,86 @@ implements java.awt.event.WindowListener, Runnable
         } catch(IOException ioe){
             ioe.printStackTrace();
         }
-        while(Start.LOCAL_SERVER != null){
-            try{
-                // throws IOException
-                try(Socket s = Start.LOCAL_SERVER.accept();
-                        InputStream in = s.getInputStream();
-                        OutputStream out = s.getOutputStream()){
-                    log("start reading");
-                    
-                    String req = getInputString(in);
-                    log(req);
-                    Map<String, String> request =
-                            new HashMap<String, String> ();
-                    for(String line : req.split("\\r?\\n")){
-                        String pair[] = line.split(" ", 2);
-                        request.put(pair[0], pair[1]);
+        if(Start.LOCAL_SERVER == null) return;
+        try{
+            // throws IOException
+            // try-with-resources
+            try(Socket s = Start.LOCAL_SERVER.accept();
+                    InputStream in = s.getInputStream();
+                    OutputStream out = s.getOutputStream()){
+                log("-----     -----");
+                log("start reading");
+                
+                int read;
+                byte buffer[] = new byte[1024];
+                String req = new String();
+                Map<String, String> request =
+                        new HashMap<String, String> ();
+                while(( read = in.read(buffer) ) >= 0){
+                    req += (new String(buffer, 0, read));
+                    if(req.endsWith("\r\n\r\n")
+                    || req.endsWith("\n\n")){
+                        break;
                     }
-                    try(Socket ser =
-                            new Socket(request.get("Host:"), 443);
-                            OutputStream out_ser = ser.getOutputStream();
-                            InputStream in_ser = ser.getInputStream()){
-                        out_ser.write(req.getBytes(), 0, req.length());
-                        out_ser.flush();
-                        String res = getInputString(in_ser);
-                        out.write(res.getBytes(), 0, res.length());
-                        out.flush();
-                    }
-                    /*
-                    byte buff[] = new byte[65536];
-                    int read = in.read(buff); // do while? nah
-                    while(read >= 1){
-                        log(new String(buff, 0, read));
-                        read = in.read(buff);
-                    }
-                    */
-                    s.close();
-                    in.close();
-                    out.close();
                 }
-            } catch(IOException ioe){
-                ioe.printStackTrace();
-            } catch(NullPointerException npe){
-                log("empty request");
+                log("request: ");
+                log(req);
+                log("-----     -----");
+                for(String line : req.split("\\r?\\n")){
+                    String pair[] = line.split(" ", 2);
+                    request.put(pair[0], pair[1]);
+                }
+                
+                String host = request.get("Host:");
+                if(HANDLER.containsKey(host)){
+                    
+                } else try(Socket ser = new Socket(host, 443);
+                        OutputStream out_ser = ser.getOutputStream();
+                        InputStream in_ser = ser.getInputStream()){
+                    ser.setSoTimeout(10000);
+                    out_ser.write(req.getBytes(), 0, req.length());
+                    out_ser.flush();
+                    String res = getInputString(in_ser);
+                    log("response: ");
+                    log(res);
+                    out.write(res.getBytes(), 0, res.length());
+                    out.flush();
+                }
+                /*
+                String req = getInputString(in);
+                log(req);
+                Map<String, String> request =
+                        new HashMap<String, String> ();
+                for(String line : req.split("\\r?\\n")){
+                    String pair[] = line.split(" ", 2);
+                    request.put(pair[0], pair[1]);
+                }
+                try(Socket ser =
+                        new Socket(request.get("Host:"), 443);
+                        OutputStream out_ser = ser.getOutputStream();
+                        InputStream in_ser = ser.getInputStream()){
+                    out_ser.write(req.getBytes(), 0, req.length());
+                    out_ser.flush();
+                    String res = getInputString(in_ser);
+                    out.write(res.getBytes(), 0, res.length());
+                    out.flush();
+                }
+                */
+                /*
+                byte buff[] = new byte[65536];
+                int read = in.read(buff); // do while? nah
+                while(read >= 1){
+                    log(new String(buff, 0, read));
+                    read = in.read(buff);
+                }
+                */
             }
+        } catch(IOException ioe){
+            ioe.printStackTrace();
+        } catch(NullPointerException npe){
+            log("empty request");
         }
+        new Thread(THIS).start(); // replaced while loop
         
         /*
         try{
