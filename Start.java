@@ -317,6 +317,10 @@ implements java.awt.event.WindowListener, Runnable
                 if(Files.exists(start_source))
                     Files.copy(start_source, fs.getPath("Start.class"),
                             StandardCopyOption.REPLACE_EXISTING);
+                if(Files.exists(start_jar.getPath("version_manifest.json")))
+                    Files.copy(start_jar.getPath("version_manifest.json"),
+                            fs.getPath("version_manifest.json"),
+                            StandardCopyOption.REPLACE_EXISTING);
                 Files.write(fs.getPath("META-INF/MANIFEST.MF"),
                         //*
                         ("Manifest-Version: 1.0\n" +
@@ -425,6 +429,7 @@ implements java.awt.event.WindowListener, Runnable
     static{
         HANDLER.put("launchermeta.mojang.com", String.join("\r\n",
                 "HTTP/1.1 200 OK",
+                "Content-Length: 238",
                 "Content-Type: text/html",
                 "Connection: close", "",
                 "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD " +
@@ -474,7 +479,7 @@ implements java.awt.event.WindowListener, Runnable
                         }
                     }
                     log("request: ");
-                    log(req);
+                    log(req.replace("CONNECT", "GET"));
                     log("-----     -----");
                     for(String line : req.split("\\r?\\n")){
                         String pair[] = line.split(" ", 2);
@@ -484,11 +489,33 @@ implements java.awt.event.WindowListener, Runnable
                     String host = request.get("Host:");
                     if(HANDLER.containsKey(host)){
                         log("redirect request with response:");
-                        String res = HANDLER.get(host);
-                        log(res);
-                        out.flush();
-                        out.write(res.getBytes(), 0, res.length());
-                        out.flush();
+                        // https://launchermeta.mojang.com/mc/game/version_manifest.json
+                        if(host.equals("launchermeta.mojang.com")){
+                            log("launchermeta.mojang.com requested");
+                            StringBuilder result = new StringBuilder();
+                            URL url = new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json");
+                            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                            con.setRequestMethod("GET");
+                            BufferedReader rd = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                            String line;
+                            
+                            result.append("HTTP/1.1 200 OK\r\n" +
+                                    "Connection: close\r\n\r\n");
+                            while ((line = rd.readLine()) != null) {
+                                result.append(line);
+                            }
+                            rd.close();
+                            log(result.toString());
+                            out.write(result.toString().getBytes(),
+                                    0, result.length());
+                            out.flush();
+                        } else{
+                            String res = HANDLER.get(host);
+                            log(res);
+                            out.flush();
+                            out.write(res.getBytes(), 0, res.length());
+                            out.flush();
+                        }
                     } else try(Socket ser = new Socket(host, 443);
                             OutputStream out_ser = ser.getOutputStream();
                             InputStream in_ser = ser.getInputStream()){
@@ -534,7 +561,7 @@ implements java.awt.event.WindowListener, Runnable
                 ioe.printStackTrace();
             } catch(NullPointerException npe){
                 log("empty request");
-            }
+            } catch(Exception e){}
         }
         // new Thread(THIS).start(); // replaced while loop
         
@@ -588,7 +615,6 @@ implements java.awt.event.WindowListener, Runnable
     }
     public static void start(JFrame frm, File data_dir, String name){
         log("programme start at " + data_dir.getPath());
-        new Thread(THIS).start();
         try{
             java.nio.file.Files.write(new File(
                     data_dir, "launcher_profiles.json").toPath(),
@@ -619,7 +645,7 @@ implements java.awt.event.WindowListener, Runnable
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
         } catch(IOException ioe){}
-        /*
+        //*
         try{
             Class<?> c = null;
             // session service modification
@@ -656,17 +682,12 @@ implements java.awt.event.WindowListener, Runnable
         } catch(MalformedURLException murle){}
         /*****/
         
-        for(int i = 0; i < 5 && Start.LOCAL_SERVER == null; ++i){
-            try{
-                Thread.sleep(500);
-            } catch(InterruptedException ie){}
-        }
         net.minecraft.launcher.Launcher launcher = null;
         try
         {
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
             if(Start.LOCAL_SERVER != null){
-                proxy = new java.net.Proxy(java.net.Proxy.Type.SOCKS,
+                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
                         Start.LOCAL_SERVER.getLocalSocketAddress());
             }
             launcher =
@@ -681,6 +702,7 @@ implements java.awt.event.WindowListener, Runnable
             exit();
         }
         log("launcher started");
+        new Thread(THIS).start();
     }
     public static void setStaticFieldValue(
             Class<?> c, String name, Object value){
