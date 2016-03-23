@@ -436,34 +436,7 @@ implements java.awt.event.WindowListener, Runnable
                 "</HEAD><BODY></BODY></HTML>", ""));
         HANDLER.put("", "");
     }
-    
-    private boolean isRequest = false;
-    private InputStream in;
-    private OutputStream out_ser;
-    private String req;
-    public Start(InputStream in, OutputStream out_ser){
-        this.isRequest = true;
-        this.in = in;
-        this.out_ser = out_ser;
-    }
-    public String getRequest(){
-        return this.req;
-    }
     @Override public void run(){
-        if(isRequest){
-            int read;
-            byte buffer[] = new byte[1024];
-            Map<String, String> request =
-                    new HashMap<String, String> ();
-            while(( read = in.read(buffer) ) >= 0){
-                req += (new String(buffer, 0, read));
-                if(req.endsWith("\r\n\r\n")
-                || req.endsWith("\n\n")){
-                    break;
-                }
-            }
-            return;
-        }
         log("server socket listening");
         try{
             Start.LOCAL_SERVER = new ServerSocket(8080);
@@ -488,7 +461,18 @@ implements java.awt.event.WindowListener, Runnable
                     
                     s.setSoTimeout(10000);
                     
-                    Start requestThread = new Start(in, )
+                    int read;
+                    byte buffer[] = new byte[1024];
+                    String req = new String();
+                    Map<String, String> request =
+                            new HashMap<String, String> ();
+                    while(( read = in.read(buffer) ) >= 0){
+                        req += (new String(buffer, 0, read));
+                        if(req.endsWith("\r\n\r\n")
+                        || req.endsWith("\n\n")){
+                            break;
+                        }
+                    }
                     log("request: ");
                     log(req);
                     log("-----     -----");
@@ -502,6 +486,7 @@ implements java.awt.event.WindowListener, Runnable
                         log("redirect request with response:");
                         String res = HANDLER.get(host);
                         log(res);
+                        out.flush();
                         out.write(res.getBytes(), 0, res.length());
                         out.flush();
                     } else try(Socket ser = new Socket(host, 443);
@@ -681,7 +666,7 @@ implements java.awt.event.WindowListener, Runnable
         {
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
             if(Start.LOCAL_SERVER != null){
-                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                proxy = new java.net.Proxy(java.net.Proxy.Type.SOCKS,
                         Start.LOCAL_SERVER.getLocalSocketAddress());
             }
             launcher =
