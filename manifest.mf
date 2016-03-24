@@ -1,0 +1,6 @@
+Premain-Class: Start
+Main-Class: Start
+Agent-Class: Start
+Can-Redefine-Classes: true
+Can-Retransform-Classes: true
+

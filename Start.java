@@ -1,12 +1,15 @@
 
 import java.awt.Font;
+import java.lang.instrument.*;
 import java.lang.reflect.*;
 import java.io.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
 import javax.swing.*;
-import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.*;
+import java.security.*;
+import javassist.*;
 
 /*
 extends OutputStream removed as implementation of
@@ -16,8 +19,35 @@ using invocationhandler for the implementation of redirecting system.out
 
 public class Start extends OutputStream
 implements java.awt.event.WindowListener, Runnable
+// , ClassFileTransformer
 // , InvocationHandler
 {
+    /*
+    private static volatile Instrumentation INST = null;
+    public static void premain(String args, Instrumentation inst){
+        INST = inst;
+        INST.addTransformer(THIS);
+    }
+    public byte[] transform(ClassLoader cl, String name, Class c,
+            ProtectionDomain pd, byte buffer[])
+            throws IllegalClassFormatException{
+        String c1 = "com.mojang.authlib.HttpAuthenticationService";
+        if(name.equals(c1.replace('.', '/'))){
+            try{
+                ClassPool cp = ClassPool.getDefault();
+                CtClass cc = cp.get(c1);
+                CtMethod m = cc.getDeclaredMethod("performGetRequest");
+                m.insertBefore("System.out.println(url)");
+                buffer = cc.toBytecode();
+                cc.detach();
+            } catch(Exception e){
+                e.printStackTrace();
+            }
+        }
+        return buffer;
+    }
+    */
+    
     private static final URL LAUNCHER_URL = ((
             java.util.function.Supplier<URL>)() ->{
                 try{ return new URL("https://s3.amazonaws.com/" +
@@ -73,8 +103,11 @@ implements java.awt.event.WindowListener, Runnable
                 
                 Start.FRAME.add(scroll);
                 Start.FRAME.setLocationRelativeTo(null);
+                //if(INST != null) Start.FRAME.setVisible(true);
                 Start.FRAME.setVisible(true);
                 
+                System.setOut(new PrintStream(THIS));
+                System.setErr(new PrintStream(THIS));
                 /*
                 System.setOut((PrintStream)
                         java.lang.reflect.Proxy.newProxyInstance(
@@ -104,28 +137,14 @@ implements java.awt.event.WindowListener, Runnable
                             "start_config.ini").toPath())){
                         String elem[] = line.split("=", 2);
                         map.put(elem[0].toLowerCase(), elem[1]);
-                        log(String.format("key: %s, value: %s\n",
-                                elem[0], elem[1]));
+                        System.out.printf("key: %s, value: %s\n",
+                                elem[0], elem[1]);
                     }
                 } catch(IOException ioe){}
                 return map;
             }).get();
     
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
-    public static void log(Object ln){
-        OUT.println(ln);
-        if(ln == null) return;
-        if(Start.FRAME.isDisplayable()){
-            Start.TEXT.append(ln.toString() + '\n');
-        }
-        if(Start.DEBUG) try{
-            Files.write(new File(Start.PARENT_DIRECTORY,
-                    "start.log").toPath(),
-                    ("\n" + ln.toString() + "\n").getBytes(),
-                    StandardOpenOption.APPEND,
-                    StandardOpenOption.CREATE);
-        } catch(IOException ioe){}
-    }
     
     public static final File DATA_DIRECTORY = ((
             java.util.function.Supplier<File>)() ->{
@@ -159,7 +178,6 @@ implements java.awt.event.WindowListener, Runnable
     public static final File LAUNCHER_JAR = new File(
                 Start.DATA_DIRECTORY, "launcher.jar");
     
-    private static ServerSocket LOCAL_SERVER = null;
     
     
     
@@ -167,34 +185,43 @@ implements java.awt.event.WindowListener, Runnable
     MAIN
     */
     public static void main(String args[]){
-        
-        if(Start.DEBUG) for(int i = 0; i < args.length; ++i){
+        /*
+        if(INST == null){
             try{
-                Files.write(new File(Start.DATA_DIRECTORY,
-                        "start.log").toPath(),
-                        ("\n" + (args[i].equals("work_dir")) +
-                        "\n" + args[i] + "\n").getBytes(),
-                        StandardOpenOption.APPEND,
-                        StandardOpenOption.CREATE);
-            } catch(IOException ioe){}
+                Process p = Runtime.getRuntime().exec(
+                        "java -javaagent:Start.jar -cp . -jar Start.jar",
+                        null, PARENT_DIRECTORY);
+                System.setOut(new PrintStream(p.getOutputStream()));
+                // System.setErr(new PrintStream(p.getErrorStream()));
+                p.waitFor();
+            } catch(Exception e){
+                e.printStackTrace();
+            }
+            
+            //exit();
+            return;
         }
+        */
+        Start.MAIN = Thread.currentThread();
+        System.out.println("\nSTART_URL: " + START_URL.toExternalForm());
+        System.out.println("\nSTART: " + START);
+        System.out.println("\nPARENT_DIRECTORY: " + PARENT_DIRECTORY);
+        System.out.println();
+        Start.CLIENT_TOKEN[0] = "87584590-7ab6-40e7-9c0e-5f5a8501937a";
+        Start.ACCESS_TOKEN[0] = "aff3101b2d8d43bbb42fab2e6e993e28";
         
-        if(args.length >= 4 &&
-                args[0].equals("work_dir") &&
-                args[2].equals("name")){
-            log("launcher start with working directory and name provided");
-            Start.start(Start.FRAME, new File(args[1]), args[3]);
-            return;
-        } else if(Start.START.getName().equals("launcher.jar")){
-            log("launcher.jar detected, start with default config");
-            Start.start(Start.FRAME, Start.PARENT_DIRECTORY,
-                    Start.getName(Start.PARENT_DIRECTORY));
-            return;
-        }
+        if(Start.DEBUG) try{
+            Files.write(new File(Start.PARENT_DIRECTORY,
+                    "start.log").toPath(), ("arguments: \"" +
+                    String.join("\" \"", args)).getBytes(),
+                    StandardOpenOption.APPEND,
+                    StandardOpenOption.CREATE);
+        } catch(IOException ioe){}
+        
         try{
             new ServerSocket(65535, 5);
         } catch(BindException be){
-            log("launcher already started");
+            System.out.println("launcher already started");
             Start.exit();
         } catch(IOException ioe){}
         try{
@@ -211,7 +238,8 @@ implements java.awt.event.WindowListener, Runnable
             long start = System.nanoTime();
             connection.connect();
             long elapsed = System.nanoTime() - start;
-            log("Got reply in: " + elapsed / 1000000L + "ms");
+            System.out.println("Got reply in: " +
+                    elapsed / 1000000L + "ms");
             
             if(!Start.LAUNCHER_PACK.exists()){
                 Start.LAUNCHER_PACK.getParentFile().mkdirs();
@@ -240,10 +268,10 @@ implements java.awt.event.WindowListener, Runnable
             
             float elapsedSeconds = (float)(1L + elapsedDownload) / 1.0E9F;
             float kbRead = (float)bytesRead / 1024.0F;
-            log(String.format("Downloaded %.1fkb in %ds at %.1fkb/s",
+            System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
                     Float.valueOf(kbRead), (int)elapsedSeconds,
                     Float.valueOf(kbRead / elapsedSeconds)
-            ));
+            );
             
             String packPath = Start.LAUNCHER_PACK.getAbsolutePath();
             if(packPath.endsWith(".lzma")){
@@ -255,7 +283,7 @@ implements java.awt.event.WindowListener, Runnable
                 unpacked.createNewFile();
             }
             
-            log("reversing LZMA on " +
+            System.out.println("reversing LZMA on " +
                     Start.LAUNCHER_PACK + " to " + packPath);
             Class<?> lzma_in = null;
             try{
@@ -265,8 +293,11 @@ implements java.awt.event.WindowListener, Runnable
                 Class.forName("LZMA.LzmaInputStream",
                         true, Start.class.getClassLoader());
                 */
-                if(lzma_in == null) log("class not initialized");
-                else log(lzma_in.getConstructor(InputStream.class));
+                if(lzma_in == null)
+                    System.out.println("class not initialized");
+                else
+                    System.out.println(lzma_in.getConstructor(
+                            InputStream.class));
             } catch(ClassNotFoundException|NoSuchMethodException e){
                 e.printStackTrace();
             }
@@ -283,7 +314,8 @@ implements java.awt.event.WindowListener, Runnable
             } catch(Exception e){
                 e.printStackTrace();
             }
-            log("unpacking " + unpacked + " to " + Start.LAUNCHER_JAR);
+            System.out.println("unpacking " +
+                    unpacked + " to " + Start.LAUNCHER_JAR);
             try(java.util.jar.JarOutputStream jar_out =
                     new java.util.jar.JarOutputStream(
                     new FileOutputStream(Start.LAUNCHER_JAR))){
@@ -294,7 +326,7 @@ implements java.awt.event.WindowListener, Runnable
             }
             Files.deleteIfExists(unpacked.toPath());
             
-            log("adding & deleting files in launcher.jar");
+            System.out.println("adding & deleting files in launcher.jar");
             /*
             java.util.jar.JarFile launcher_jar =
                     new java.util.jar.JarFile(Start.LAUNCHER_JAR);
@@ -317,10 +349,13 @@ implements java.awt.event.WindowListener, Runnable
                 if(Files.exists(start_source))
                     Files.copy(start_source, fs.getPath("Start.class"),
                             StandardCopyOption.REPLACE_EXISTING);
-                if(Files.exists(start_jar.getPath("version_manifest.json")))
+                /*
+                if(Files.exists(start_jar.getPath(
+                        "version_manifest.json")))
                     Files.copy(start_jar.getPath("version_manifest.json"),
                             fs.getPath("version_manifest.json"),
                             StandardCopyOption.REPLACE_EXISTING);
+                */
                 Files.write(fs.getPath("META-INF/MANIFEST.MF"),
                         //*
                         ("Manifest-Version: 1.0\n" +
@@ -337,31 +372,27 @@ implements java.awt.event.WindowListener, Runnable
                         StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);
             } catch(FileSystemException fse){
-                log("launcher.jar already started");
+                System.out.println("launcher.jar already started");
                 exit();
             } catch(IOException ioe){
                 ioe.printStackTrace();
             }
             
-            log("starting launcher.");
-            /*
+            System.out.println("starting launcher.");
+            //*
             try{
                 URLClassLoader cl = new URLClassLoader(new URL[] {
                         Start.LAUNCHER_JAR.toURI().toURL()
                 });//, Thread.currentThread().getContextClassLoader());
-                Thread thread = new Thread(THIS);
-                thread.setContextClassLoader(cl);
-                thread.start();
-                Class<?> c =
-                new java.net.URLClassLoader(new URL[] {
-                        Start.LAUNCHER_JAR.toURI().toURL()
-                }).loadClass("Start");
                 
-                Class.forName("Start", false, new java.net.URLClassLoader(
-                        new URL[] {Start.LAUNCHER_JAR.toURI().toURL()
-                }));
-                c.getMethod("start", JFrame.class, File.class).invoke(
-                        null, Start.FRAME, Start.DATA_DIRECTORY);
+                Class<?> c =
+                        // cl.loadClass("Start");
+                        Class.forName("Start", false, cl);
+                
+                c.getMethod("start", ClassLoader.class, JFrame.class,
+                        File.class, String.class).invoke(
+                        null, cl, Start.FRAME, Start.DATA_DIRECTORY,
+                        Start.getName(Start.DATA_DIRECTORY));
             } catch(Exception e){
                 e.printStackTrace();
             }
@@ -376,7 +407,7 @@ implements java.awt.event.WindowListener, Runnable
         } catch(IOException ioe){
             ioe.printStackTrace();
         } finally{
-            Start.exit();
+            // Start.exit();
         }
     }
     private static final String getName(File data_dir){
@@ -424,6 +455,8 @@ implements java.awt.event.WindowListener, Runnable
  * run
  * 
  */
+    private static ServerSocket LOCAL_SERVER = null;
+    private static SSLServerSocket LOCAL_SERVER_SSL = null;
     private static final Map<String, String> HANDLER =
             new HashMap<String, String> ();
     static{
@@ -442,12 +475,7 @@ implements java.awt.event.WindowListener, Runnable
         HANDLER.put("", "");
     }
     @Override public void run(){
-        log("server socket listening");
-        try{
-            Start.LOCAL_SERVER = new ServerSocket(8080);
-        } catch(IOException ioe){
-            ioe.printStackTrace();
-        }
+        System.out.println("server socket listening");
         while(Start.LOCAL_SERVER != null){
             try{
                 // throws IOException
@@ -461,8 +489,8 @@ implements java.awt.event.WindowListener, Runnable
                         InputStream in = s.getInputStream();
                         OutputStream out = s.getOutputStream();
                 /*****/
-                    log("-----     -----");
-                    log("start reading");
+                    System.out.println("-----     -----");
+                    System.out.println("start reading");
                     
                     s.setSoTimeout(10000);
                     
@@ -478,44 +506,48 @@ implements java.awt.event.WindowListener, Runnable
                             break;
                         }
                     }
-                    log("request: ");
-                    log(req.replace("CONNECT", "GET"));
-                    log("-----     -----");
+                    System.out.println("-----     -----");
+                    System.out.println("request: ");
                     for(String line : req.split("\\r?\\n")){
                         String pair[] = line.split(" ", 2);
                         request.put(pair[0], pair[1]);
+                        System.out.printf("%s %s\n", pair[0], pair[1]);
                     }
+                    System.out.println("-----     -----");
                     
                     String host = request.get("Host:");
-                    if(HANDLER.containsKey(host)){
-                        log("redirect request with response:");
-                        // https://launchermeta.mojang.com/mc/game/version_manifest.json
-                        if(host.equals("launchermeta.mojang.com")){
-                            log("launchermeta.mojang.com requested");
-                            StringBuilder result = new StringBuilder();
-                            URL url = new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json");
-                            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-                            con.setRequestMethod("GET");
-                            BufferedReader rd = new BufferedReader(new InputStreamReader(con.getInputStream()));
-                            String line;
-                            
-                            result.append("HTTP/1.1 200 OK\r\n" +
-                                    "Connection: close\r\n\r\n");
-                            while ((line = rd.readLine()) != null) {
-                                result.append(line);
-                            }
-                            rd.close();
-                            log(result.toString());
-                            out.write(result.toString().getBytes(),
-                                    0, result.length());
-                            out.flush();
-                        } else{
-                            String res = HANDLER.get(host);
-                            log(res);
-                            out.flush();
-                            out.write(res.getBytes(), 0, res.length());
-                            out.flush();
+                    if("launchermeta.mojang.com".equals(host)){
+                        // https://launchermeta.mojang.com
+                        // /mc/game/version_manifest.json
+                        System.out.println(
+                                "launchermeta.mojang.com requested");
+                        System.out.println(
+                                    "redirect request with response:");
+                        StringBuilder result = new StringBuilder();
+                        URL url = new URL("https://" +
+                                "launchermeta.mojang.com" +
+                                "/mc/game/version_manifest.json");
+                        HttpURLConnection con = (HttpURLConnection)
+                                url.openConnection();
+                        con.setRequestMethod("GET");
+                        BufferedReader rd = new BufferedReader(
+                                new InputStreamReader(
+                                con.getInputStream()));
+                        String line;
+                        
+                        result.append(String.join("\r\n",
+                                "HTTP/1.1 200 OK",
+                                "Content-Length: " +
+                                con.getContentLength(),
+                                "Content-Type: application/json",
+                                "Connection: close", ""));
+                        while((line = rd.readLine()) != null){
+                            result.append(line);
                         }
+                        rd.close();
+                        out.write(result.toString().getBytes(),
+                                0, result.length());
+                        out.flush();
                     } else try(Socket ser = new Socket(host, 443);
                             OutputStream out_ser = ser.getOutputStream();
                             InputStream in_ser = ser.getInputStream()){
@@ -523,8 +555,8 @@ implements java.awt.event.WindowListener, Runnable
                         out_ser.write(req.getBytes(), 0, req.length());
                         out_ser.flush();
                         String res = getInputString(in_ser);
-                        log("response: ");
-                        log(res);
+                        System.out.println("response: ");
+                        System.out.println(res);
                         out.write(res.getBytes(), 0, res.length());
                         out.flush();
                     }
@@ -560,7 +592,7 @@ implements java.awt.event.WindowListener, Runnable
             } catch(IOException ioe){
                 ioe.printStackTrace();
             } catch(NullPointerException npe){
-                log("empty request");
+                System.out.println("empty request");
             } catch(Exception e){}
         }
         // new Thread(THIS).start(); // replaced while loop
@@ -605,16 +637,34 @@ implements java.awt.event.WindowListener, Runnable
 	};
     */
     
-    static{
-        log("\nSTART_URL: " + START_URL.toExternalForm());
-        log("\nSTART: " + START);
-        log("\nPARENT_DIRECTORY: " + PARENT_DIRECTORY);
-        log("");
-        Start.CLIENT_TOKEN[0] = "87584590-7ab6-40e7-9c0e-5f5a8501937a";
-        Start.ACCESS_TOKEN[0] = "aff3101b2d8d43bbb42fab2e6e993e28";
-    }
-    public static void start(JFrame frm, File data_dir, String name){
-        log("programme start at " + data_dir.getPath());
+    
+    
+    
+    
+    /**
+     * start
+     */
+    public static void start(ClassLoader cl,
+            JFrame frm, File data_dir, String name){
+        Thread.currentThread().setContextClassLoader(cl);
+        ClassPool cp = ClassPool.getDefault();
+        LoaderClassPath lcp = new LoaderClassPath(cl);
+        cp.insertClassPath(lcp);
+        System.out.println(lcp.find(
+                "com.mojang.authlib.HttpAuthenticationService"));
+        
+
+
+
+
+        System.out.println("programme start at " + data_dir.getPath());
+        Class<?> constants = null;
+        try{
+            constants = cl.loadClass(
+                    "net.minecraft.launcher.LauncherConstants");
+        } catch(Exception e){
+            e.printStackTrace();
+        }
         try{
             java.nio.file.Files.write(new File(
                     data_dir, "launcher_profiles.json").toPath(),
@@ -636,21 +686,22 @@ implements java.awt.event.WindowListener, Runnable
                     "  \"selectedUser\": \"" +
                     Start.UUID[0].replace("-", "") +
                     "\",\n  \"launcherVersion\": {\n    \"name\": \"" + 
-                    net.minecraft.launcher.LauncherConstants.class
-                    .getPackage().getImplementationVersion() +
-                    "\",\n    \"format\": " + net.minecraft.launcher
-                    .LauncherConstants.VERSION_FORMAT +
+                    constants.getPackage().getImplementationVersion() +
+                    "\",\n    \"format\": " + constants.getField(
+                    "VERSION_FORMAT").getInt(null) +
                     "\n  }\n}").getBytes(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
-        } catch(IOException ioe){}
+        } catch(Exception e){
+            e.printStackTrace();
+        }
         //*
         try{
             Class<?> c = null;
             // session service modification
-            c = com.mojang.authlib.yggdrasil
-                    .YggdrasilMinecraftSessionService.class;
+            c = cl.loadClass("com.mojang.authlib.yggdrasil" +
+                    ".YggdrasilMinecraftSessionService");
             // "https://sessionserver.mojang.com/session/minecraft/";
             Start.setStaticFieldValue(c, "BASE_URL", Start.CUSTOM_URL);
             Start.setStaticFieldValue(c, "JOIN_URL",
@@ -658,8 +709,8 @@ implements java.awt.event.WindowListener, Runnable
             Start.setStaticFieldValue(c, "CHECK_URL",
                     new URL(Start.CUSTOM_URL + "hasJoined"));
             // authlib modification
-            c = com.mojang.authlib.yggdrasil
-                    .YggdrasilUserAuthentication.class;
+            c = cl.loadClass("com.mojang.authlib.yggdrasil" +
+                    ".YggdrasilUserAuthentication");
             // "https://authserver.mojang.com/"
             Start.setStaticFieldValue(c, "BASE_URL", Start.CUSTOM_URL);
             Start.setStaticFieldValue(c, "ROUTE_AUTHENTICATE",
@@ -672,37 +723,58 @@ implements java.awt.event.WindowListener, Runnable
                     new URL(Start.CUSTOM_URL + "invalidate"));
             Start.setStaticFieldValue(c, "ROUTE_SIGNOUT",
                     new URL(Start.CUSTOM_URL + "signout"));
-            c = com.mojang.authlib.yggdrasil
-                    .YggdrasilGameProfileRepository.class;
+            c = cl.loadClass("com.mojang.authlib.yggdrasil" +
+                    ".YggdrasilGameProfileRepository");
             Start.setStaticFieldValue(c, "BASE_URL",
                     "https://image-uploader-xvalen214x.c9users.io");
             Start.setStaticFieldValue(c, "SEARCH_PAGE_URL",
                     "https://image-uploader-xvalen214x.c9users.io");
-            log("have I changed anything?");
-        } catch(MalformedURLException murle){}
+            System.out.println("have I changed anything?");
+        } catch(Exception e){
+            e.printStackTrace();
+        }
         /*****/
         
-        net.minecraft.launcher.Launcher launcher = null;
-        try
-        {
+        try{
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
-            if(Start.LOCAL_SERVER != null){
+            /*
+            try{
+                Start.LOCAL_SERVER_SSL = (SSLServerSocket)
+                        SSLServerSocketFactory.getDefault()
+                        .createServerSocket(8081);
+                SocketAddress address =
+                        LOCAL_SERVER_SSL.getLocalSocketAddress();
+                LOCAL_SERVER.bind(address);
+                Start.LOCAL_SERVER = new ServerSocket(8080);
+                
                 proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
                         Start.LOCAL_SERVER.getLocalSocketAddress());
+                System.out.println(LOCAL_SERVER.getLocalSocketAddress());
+                System.out.println("use custom proxy");
+                if(Start.LOCAL_SERVER != null){
+                    Thread t = new Thread(THIS);
+                    t.start();
+                    ALLOWED.add(t);
+                }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
             }
-            launcher =
-                    new net.minecraft.launcher.Launcher(frm, data_dir,
-                    proxy, null, new String[0],
-                    net.minecraft.launcher.LauncherConstants.
-                    SUPER_COOL_BOOTSTRAP_VERSION);
+            */
+            
+            RESTRICT = false;
+            cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
+                    JFrame.class, File.class, java.net.Proxy.class,
+                    PasswordAuthentication.class, String[].class,
+                    Integer.class).newInstance(frm, data_dir,
+                    proxy, null, new String[0], constants.getField(
+                    "SUPER_COOL_BOOTSTRAP_VERSION").getInt(null));
         } catch(Exception e){
-            log("Unable to start: ");
+            System.out.println("Unable to start: ");
             e.printStackTrace();
             e.fillInStackTrace().printStackTrace();
             exit();
         }
-        log("launcher started");
-        new Thread(THIS).start();
+        System.out.println("launcher started");
     }
     public static void setStaticFieldValue(
             Class<?> c, String name, Object value){
@@ -711,11 +783,11 @@ implements java.awt.event.WindowListener, Runnable
             field.setAccessible(true);
             Field modifiers = Field.class.getDeclaredField("modifiers");
             modifiers.setAccessible(true);
-            modifiers.setInt(field,
-                    field.getModifiers() & ~Modifier.FINAL);
+            modifiers.setInt(field, field.getModifiers() &
+                    ~java.lang.reflect.Modifier.FINAL);
             field.set(null, value);
-            modifiers.setInt(field,
-                    field.getModifiers() & Modifier.FINAL);
+            modifiers.setInt(field, field.getModifiers() &
+                    java.lang.reflect.Modifier.FINAL);
             modifiers.setAccessible(false);
             field.setAccessible(false);
         } catch(Exception e){
@@ -749,14 +821,29 @@ implements java.awt.event.WindowListener, Runnable
     }
 */
 //* OutputStream
-    @Override public void write(int b){
+    private static Thread MAIN;
+    private static List<Thread> ALLOWED = new LinkedList<Thread> ();
+    private static boolean RESTRICT = false;
+    private static final OutputStream LOG = ((
+            java.util.function.Supplier<OutputStream>)() ->{
+                    if(Start.DEBUG) try{ return new FileOutputStream(
+                    new File(Start.PARENT_DIRECTORY, "start.log"));
+                    } catch(FileNotFoundException fnfe){}
+                    return null;}).get();
+    @Override public synchronized void write(int b){
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         Start.OUT.print(new String(Character.toChars(b)));
-        Start.TEXT.append(new String(Character.toChars(b)));
+        if(Start.FRAME.isDisplayable()){
+            Start.TEXT.append(new String(Character.toChars(b)));
+        }
+        if(Start.DEBUG && LOG != null) try{
+            Start.LOG.write(b);
+        } catch(IOException ioe){}
     }
 //*/
 
     private static void exit(){
-        log("programme exit");
+        System.out.println("programme exit");
         if(Start.FRAME != null) Start.FRAME.dispose();
         if(Start.LOCAL_SERVER != null) try{ Start.LOCAL_SERVER.close();
         } catch(IOException ioe){}
