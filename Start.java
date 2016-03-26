@@ -356,21 +356,23 @@ implements java.awt.event.WindowListener, Runnable
                             fs.getPath("version_manifest.json"),
                             StandardCopyOption.REPLACE_EXISTING);
                 */
+                /*
                 Files.write(fs.getPath("META-INF/MANIFEST.MF"),
                         //*
                         ("Manifest-Version: 1.0\n" +
                         "Created-By: 1.8.0_72 (Oracle Corporation)\n" +
                         "Main-Class: Start\n\n\n").getBytes(),
-                        /*/
+                        /* /
                         javax.xml.bind.DatatypeConverter.parseHexBinary(
                         "4d616e69666573742d56657273696f6e3a20312e300d0a4" +
                         "37265617465642d42793a20312e382e305f323020284f72" +
                         "61636c6520436f72706f726174696f6e290d0a4d61696e2" +
                         "d436c6173733a2053746172740d0a0d0a"),
-                        /*****/
+                        /***** /
                         StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);
+                */
             } catch(FileSystemException fse){
                 System.out.println("launcher.jar already started");
                 exit();
@@ -459,6 +461,12 @@ implements java.awt.event.WindowListener, Runnable
     private static SSLServerSocket LOCAL_SERVER_SSL = null;
     private static final Map<String, String> HANDLER =
             new HashMap<String, String> ();
+            
+    private Socket client = null;
+    public Start(){}
+    public Start(Socket client){
+        this.client = client;
+    }
     static{
         HANDLER.put("launchermeta.mojang.com", String.join("\r\n",
                 "HTTP/1.1 200 OK",
@@ -475,8 +483,11 @@ implements java.awt.event.WindowListener, Runnable
         HANDLER.put("", "");
     }
     @Override public void run(){
-        System.out.println("server socket listening");
-        while(Start.LOCAL_SERVER != null){
+        if(this.client != null){
+            
+            return;
+        } else{
+            System.out.println("server socket listening");
             try{
                 // throws IOException
                 // try-with-resources
@@ -484,16 +495,12 @@ implements java.awt.event.WindowListener, Runnable
                 try(Socket s = Start.LOCAL_SERVER.accept();
                         InputStream in = s.getInputStream();
                         OutputStream out = s.getOutputStream()){
-                /*/
-                        Socket s = Start.LOCAL_SERVER.accept();
-                        InputStream in = s.getInputStream();
-                        OutputStream out = s.getOutputStream();
-                /*****/
                     System.out.println("-----     -----");
+                    System.out.println("request received");
                     System.out.println("start reading");
                     
                     s.setSoTimeout(10000);
-                    
+                    /* legacy replaced by multi-threading
                     int read;
                     byte buffer[] = new byte[1024];
                     String req = new String();
@@ -519,14 +526,17 @@ implements java.awt.event.WindowListener, Runnable
                     if("launchermeta.mojang.com".equals(host)){
                         // https://launchermeta.mojang.com
                         // /mc/game/version_manifest.json
+                        String address = "https://" +
+                                "launchermeta.mojang.com" +
+                                "/mc/game/version_manifest.json";
                         System.out.println(
                                 "launchermeta.mojang.com requested");
                         System.out.println(
                                     "redirect request with response:");
                         StringBuilder result = new StringBuilder();
-                        URL url = new URL("https://" +
-                                "launchermeta.mojang.com" +
-                                "/mc/game/version_manifest.json");
+                        // s.connect(new InetSocketAddress(address, 443));
+                        s.setKeepAlive(true);
+                        URL url = new URL(address);
                         HttpURLConnection con = (HttpURLConnection)
                                 url.openConnection();
                         con.setRequestMethod("GET");
@@ -544,6 +554,7 @@ implements java.awt.event.WindowListener, Runnable
                         while((line = rd.readLine()) != null){
                             result.append(line);
                         }
+                        
                         rd.close();
                         out.write(result.toString().getBytes(),
                                 0, result.length());
@@ -615,8 +626,9 @@ implements java.awt.event.WindowListener, Runnable
     
     // profile related
 	public static final String[] UUID = new String[] {
-        "CB3F55D3-645C-4F38-A497-9C13A33DB5CF",
 		"0a857290-5877-41ae-a48c-d0d9777b2ef3",
+        "CB3F55D3-645C-4F38-A497-9C13A33DB5CF",
+	    "9dba38e9fc67f72c458fdac8ecd7cabaed3eb83737143a0128350a1ab381e3e",
 		"7b881183-0eac-404f-a983-218694bc2150",
 		"4566e69f-c907-48ee-8d71-d7ba5aa00d20"
 	};
@@ -647,24 +659,73 @@ implements java.awt.event.WindowListener, Runnable
     public static void start(ClassLoader cl,
             JFrame frm, File data_dir, String name){
         Thread.currentThread().setContextClassLoader(cl);
-        ClassPool cp = ClassPool.getDefault();
-        LoaderClassPath lcp = new LoaderClassPath(cl);
-        cp.insertClassPath(lcp);
-        System.out.println(lcp.find(
-                "com.mojang.authlib.HttpAuthenticationService"));
-        
-
-
-
-
-        System.out.println("programme start at " + data_dir.getPath());
+        String class_name = "com.mojang.authlib.HttpAuthenticationService";
+        String method_name = "constantURL";
         Class<?> constants = null;
+        
+        try{
+            ClassPool cp = ClassPool.getDefault();
+            LoaderClassPath lcp = new LoaderClassPath(cl);
+            ClassClassPath ccp = new ClassClassPath(Start.class);
+            cp.insertClassPath(lcp);
+            cp.insertClassPath(ccp);
+            System.out.println(lcp.find(class_name));
+            System.out.println(ccp.find(class_name));
+            System.out.println(cp.find(class_name));
+            
+            CtClass ctc = cp.get(class_name);
+            CtMethod m = ctc.getDeclaredMethod(method_name);
+            // m.setName(method_name + "$impl");
+            // CtMethod m1 = CtNewMethod.copy(m, method_name, auth, null);
+            m.insertBefore("{System.out.println(\"HttpAS: \" + $1);}");
+            // auth.writeFile();
+            
+            method_name = "performGetRequest";
+            m = ctc.getDeclaredMethod(method_name);
+            m.insertBefore("{System.out.println(\"GET(AS): \" + $1);}");
+            
+            method_name = "performPostRequest";
+            m = ctc.getDeclaredMethod(method_name);
+            m.insertBefore("{System.out.println(\"POST(AS): \" + $1);}");
+            
+            ctc.toClass();
+            ctc.detach();
+            
+            class_name = "net.minecraft.launcher.LauncherConstants";
+            method_name = "constantURL";
+            
+            ctc = cp.get(class_name);
+            m = ctc.getDeclaredMethod(method_name);
+            m.insertBefore(
+                    "{System.out.println(\"Constants: \" + $1);}");
+            constants = ctc.toClass();
+            ctc.detach();
+            
+            class_name = "com.mojang.launcher.Http";
+            method_name = "performGet";
+            ctc = cp.get(class_name);
+            m = ctc.getDeclaredMethod(method_name);
+            m.insertBefore("{System.out.println(\"performGet: \" + $1);}");
+            ctc.toClass();
+            ctc.detach();
+        } catch(Exception e){
+            e.printStackTrace();
+        }
+        
+        /*
         try{
             constants = cl.loadClass(
                     "net.minecraft.launcher.LauncherConstants");
         } catch(Exception e){
             e.printStackTrace();
         }
+        */
+
+
+
+        System.out.println("programme start at " + data_dir.getPath());
+        
+        
         try{
             java.nio.file.Files.write(new File(
                     data_dir, "launcher_profiles.json").toPath(),
@@ -686,7 +747,8 @@ implements java.awt.event.WindowListener, Runnable
                     "  \"selectedUser\": \"" +
                     Start.UUID[0].replace("-", "") +
                     "\",\n  \"launcherVersion\": {\n    \"name\": \"" + 
-                    constants.getPackage().getImplementationVersion() +
+                    // constants.getPackage().getImplementationVersion() +
+                    "1.6.61" +
                     "\",\n    \"format\": " + constants.getField(
                     "VERSION_FORMAT").getInt(null) +
                     "\n  }\n}").getBytes(),
@@ -737,14 +799,15 @@ implements java.awt.event.WindowListener, Runnable
         
         try{
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
-            /*
+            //*
             try{
-                Start.LOCAL_SERVER_SSL = (SSLServerSocket)
-                        SSLServerSocketFactory.getDefault()
-                        .createServerSocket(8081);
+                /*
+                Start.LOCAL_SERVER = SocketFactory.getDefault()
+                        .createServerSocket(8080);
                 SocketAddress address =
-                        LOCAL_SERVER_SSL.getLocalSocketAddress();
+                        LOCAL_SERVER.getLocalSocketAddress();
                 LOCAL_SERVER.bind(address);
+                */
                 Start.LOCAL_SERVER = new ServerSocket(8080);
                 
                 proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
@@ -758,6 +821,16 @@ implements java.awt.event.WindowListener, Runnable
                 }
             } catch(IOException ioe){
                 ioe.printStackTrace();
+            }
+            /*****/
+            /*
+            try{
+                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                        new InetSocketAddress(InetAddress.getByName(
+                        "pzou.win/"), 443));
+                System.out.println("use custom proxy");
+            } catch(Exception e){
+                e.printStackTrace();
             }
             */
             
