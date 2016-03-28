@@ -18,7 +18,8 @@ using invocationhandler for the implementation of redirecting system.out
 */
 
 public class Start extends OutputStream
-implements java.awt.event.WindowListener, Runnable
+implements java.awt.event.WindowListener, Runnable,
+HandshakeCompletedListener
 // , ClassFileTransformer
 // , InvocationHandler
 {
@@ -426,11 +427,12 @@ implements java.awt.event.WindowListener, Runnable
         if((name == null) || (name.isEmpty())){
             name = JOptionPane.showInputDialog(
                     null, "input your name:", "name input",
-                    JOptionPane.PLAIN_MESSAGE).replaceAll(
-                    "[^\\p{L}\\p{Nd}]+", "");
+                    JOptionPane.PLAIN_MESSAGE);
             if((name == null) || (name.isEmpty())){
-                name="explorer";
+                name = "explorer";
             } else{
+                name = name.replaceAll(
+                        "[^\\p{L}\\p{Nd}]+", "");
                 //*
                 try{
                     Files.write(first.toPath(), name.getBytes(),
@@ -457,166 +459,271 @@ implements java.awt.event.WindowListener, Runnable
  * run
  * 
  */
+    private static SSLSocketFactory SSL_FACTORY =
+            (SSLSocketFactory)SSLSocketFactory.getDefault();
     private static ServerSocket LOCAL_SERVER = null;
     private static SSLServerSocket LOCAL_SERVER_SSL = null;
     private static final Map<String, String> HANDLER =
             new HashMap<String, String> ();
             
     private Socket client = null;
+    private InputStream in = null;
+    private OutputStream out = null;
+    private Socket server = null;
+    private boolean processing = false, processed = false;
     public Start(){}
-    public Start(Socket client){
+    public Start(Socket client, InputStream in, OutputStream out){
         this.client = client;
+        this.in = in;
+        this.out = out;
     }
     static{
+        /*
         HANDLER.put("launchermeta.mojang.com", String.join("\r\n",
-                "HTTP/1.1 200 OK",
-                "Content-Length: 238",
-                "Content-Type: text/html",
-                "Connection: close", "",
-                "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD " +
-                "HTML 4.01 Transitional//EN\" " +
-                "\"http://www.w3.org/TR/html4/loose.dtd\">",
-                "<HTML><HEAD>",
-                "<META HTTP-EQUIV=\"Content-Type\" " +
-                "CONTENT=\"text/html; charset=iso-8859-1\">",
-                "</HEAD><BODY></BODY></HTML>", ""));
+                "GET /mc/game/version_manifest.json HTTP/1.1",
+                "Host: launchermeta.mojang.com", ""));
+        */
+        HANDLER.put("launchermeta.mojang.com",
+                "https://launchermeta.mojang.com" +
+                "/mc/game/version_manifest.json");
         HANDLER.put("", "");
+    }
+    @Override public void handshakeCompleted(
+            HandshakeCompletedEvent event) {
+        System.out.println("Handshake finished!");
+        System.out.println(
+            "CipherSuite:" + event.getCipherSuite());
+        System.out.println(
+            "SessionId " + event.getSession());
+        System.out.println(
+            "PeerHost " + event.getSession().getPeerHost());
     }
     @Override public void run(){
         if(this.client != null){
+            Start.ALLOWED.add(Thread.currentThread());
             
-            return;
-        } else{
-            System.out.println("server socket listening");
+            int read;
+            byte buffer[] = new byte[1024];
+            StringBuilder req = new StringBuilder();
             try{
-                // throws IOException
-                // try-with-resources
-                //*
-                try(Socket s = Start.LOCAL_SERVER.accept();
-                        InputStream in = s.getInputStream();
-                        OutputStream out = s.getOutputStream()){
-                    System.out.println("-----     -----");
-                    System.out.println("request received");
-                    System.out.println("start reading");
-                    
-                    s.setSoTimeout(10000);
-                    /* legacy replaced by multi-threading
-                    int read;
-                    byte buffer[] = new byte[1024];
-                    String req = new String();
-                    Map<String, String> request =
-                            new HashMap<String, String> ();
-                    while(( read = in.read(buffer) ) >= 0){
-                        req += (new String(buffer, 0, read));
-                        if(req.endsWith("\r\n\r\n")
-                        || req.endsWith("\n\n")){
-                            break;
-                        }
-                    }
-                    System.out.println("-----     -----");
-                    System.out.println("request: ");
-                    for(String line : req.split("\\r?\\n")){
-                        String pair[] = line.split(" ", 2);
-                        request.put(pair[0], pair[1]);
-                        System.out.printf("%s %s\n", pair[0], pair[1]);
-                    }
-                    System.out.println("-----     -----");
-                    
-                    String host = request.get("Host:");
-                    if("launchermeta.mojang.com".equals(host)){
-                        // https://launchermeta.mojang.com
-                        // /mc/game/version_manifest.json
-                        String address = "https://" +
-                                "launchermeta.mojang.com" +
-                                "/mc/game/version_manifest.json";
-                        System.out.println(
-                                "launchermeta.mojang.com requested");
-                        System.out.println(
-                                    "redirect request with response:");
-                        StringBuilder result = new StringBuilder();
-                        // s.connect(new InetSocketAddress(address, 443));
-                        s.setKeepAlive(true);
-                        URL url = new URL(address);
-                        HttpURLConnection con = (HttpURLConnection)
-                                url.openConnection();
-                        con.setRequestMethod("GET");
-                        BufferedReader rd = new BufferedReader(
-                                new InputStreamReader(
-                                con.getInputStream()));
-                        String line;
-                        
-                        result.append(String.join("\r\n",
-                                "HTTP/1.1 200 OK",
-                                "Content-Length: " +
-                                con.getContentLength(),
-                                "Content-Type: application/json",
-                                "Connection: close", ""));
-                        while((line = rd.readLine()) != null){
-                            result.append(line);
-                        }
-                        
-                        rd.close();
-                        out.write(result.toString().getBytes(),
-                                0, result.length());
-                        out.flush();
-                    } else try(Socket ser = new Socket(host, 443);
-                            OutputStream out_ser = ser.getOutputStream();
-                            InputStream in_ser = ser.getInputStream()){
-                        ser.setSoTimeout(10000);
-                        out_ser.write(req.getBytes(), 0, req.length());
-                        out_ser.flush();
-                        String res = getInputString(in_ser);
-                        System.out.println("response: ");
-                        System.out.println(res);
-                        out.write(res.getBytes(), 0, res.length());
-                        out.flush();
-                    }
-                    /*
-                    String req = getInputString(in);
-                    log(req);
-                    Map<String, String> request =
-                            new HashMap<String, String> ();
-                    for(String line : req.split("\\r?\\n")){
-                        String pair[] = line.split(" ", 2);
-                        request.put(pair[0], pair[1]);
-                    }
-                    try(Socket ser =
-                            new Socket(request.get("Host:"), 443);
-                            OutputStream out_ser = ser.getOutputStream();
-                            InputStream in_ser = ser.getInputStream()){
-                        out_ser.write(req.getBytes(), 0, req.length());
-                        out_ser.flush();
-                        String res = getInputString(in_ser);
-                        out.write(res.getBytes(), 0, res.length());
-                        out.flush();
-                    }
-                    */
-                    /*
-                    byte buff[] = new byte[65536];
-                    int read = in.read(buff); // do while? nah
-                    while(read >= 1){
-                        log(new String(buff, 0, read));
-                        read = in.read(buff);
-                    }
-                    */
+                while(!req.toString().endsWith("\r\n\r\n")
+                && ( read = in.read(buffer) ) >= 0){
+                    req.append(new String(buffer, 0, read));
                 }
             } catch(IOException ioe){
                 ioe.printStackTrace();
-            } catch(NullPointerException npe){
-                System.out.println("empty request");
-            } catch(Exception e){}
+            }
+            
+            System.out.println("-----     -----");
+            System.out.println("request headers:");
+            System.out.println(req);
+            
+            String lines[] = req.toString().split("\r\n");
+            String uri = lines[0].split(" ", 3)[1];
+            String host = null;
+            int port = 80;
+            
+            if(lines[0].startsWith("CONNECT")){
+                if(uri.contains(":")){
+                    host = uri.substring(0, uri.indexOf(":"));
+                    port = Integer.parseInt(
+                            uri.substring(uri.indexOf(":") + 1));
+                }
+                for(String ln : lines){
+                    if(ln.startsWith("Host: ") && host == null){
+                        host = ln.replaceFirst("Host: ", "");
+                    } else if(ln.equals("Connection: keep-alive")
+                    || ln.equals("Proxy-Connection: keep-alive")){
+                        try{
+                            this.client.setKeepAlive(true);
+                        } catch(SocketException se){
+                            se.printStackTrace();
+                        }
+                    }
+                }
+            } else{
+                if(uri.startsWith("/")){
+                    for(String ln : lines){
+                        if(ln.startsWith("Host: ")){
+                            host = ln.replaceFirst("Host: ", "") + uri;
+                        }
+                    }
+                } else{
+                    host = uri;
+                }
+                // out.write("HTTP/1.1 501 Not Implemented");
+            }
+            System.out.println("host: " + host);
+            if("launchermeta.mojang.com".equals(host)){
+                this.processing = true;
+                System.out.println("launchermeta.mojang.com requested");
+                System.out.println("redirect request with response:");
+                StringBuilder result = new StringBuilder();
+                try{
+                    System.out.println(this.client);
+                    out.write(("HTTP/1.1 200 " +
+                            "Connection Established\r\n\r\n").getBytes());
+                    out.flush();
+                    
+                    buffer = new byte[1024];
+                    System.out.println("follow-up request:");
+                    while(( read = in.read(buffer) ) >= 0){
+                        System.out.println(new String(buffer, 0, read));
+                    }
+                    
+                    /*
+                    this.client.setReuseAddress(true);
+                    SSLSocket sslclient = (SSLSocket)SSL_FACTORY
+                            .createSocket(this.client, in, true);
+                    System.out.println(sslclient);
+                    sslclient.addHandshakeCompletedListener(THIS);
+                    sslclient.startHandshake();
+                    
+                    buffer = new byte[1024];
+                    req = new StringBuilder();
+                    try{
+                        while(( read = in.read(buffer) ) >= 0){
+                            req.append(new String(buffer, 0, read));
+                        }
+                    } catch(IOException ioe){
+                        ioe.printStackTrace();
+                    }
+                    System.out.println("request: ");
+                    System.out.println(req);
+                    
+                    /*/
+                    URL url = new URL(Start.HANDLER.get(host));
+                    HttpsURLConnection con = (HttpsURLConnection)
+                            url.openConnection();
+                    
+                    con.setRequestMethod("GET");
+                    
+                    for(String key : con.getRequestProperties().keySet()){
+                        System.out.printf("headers: %s: %s\n", key,
+                                con.getRequestProperty(key).toString());
+                    }
+                    
+                    
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(
+                            con.getInputStream()));
+                    String line;
+                    
+                    result.append(String.join("\r\n",
+                            "HTTP/1.1 200 OK",
+                            "Content-Length: " +
+                            con.getContentLength(),
+                            "Content-Type: application/json",
+                            "Connection: close", ""));
+                    while((line = br.readLine()) != null){
+                        result.append(line);
+                    }
+                    result.append("\r\n\r\n");
+                    
+                    for(String key : con.getHeaderFields().keySet()){
+                        System.out.printf("headers: %s: %s\n",
+                                key, con.getHeaderField(key).toString());
+                    }
+                    br.close();
+                    out.write(result.toString().getBytes(),
+                            0, result.length());
+                    out.flush();
+                    /*****/
+                } catch(IOException ioe){
+                    ioe.printStackTrace();
+                }
+                this.processed = true;
+            } else{
+                try{
+                    this.server = new Socket(host, port);
+                } catch(IOException ioe){
+                    System.out.println("cannot create host socket");
+                    System.out.println("host processed: " + host);
+                    ioe.printStackTrace();
+                    Start.ALLOWED.remove(Thread.currentThread());
+                    return;
+                }
+                System.out.println("host socket created: " + this.server);
+                try(OutputStream out_ser = this.server.getOutputStream()){
+                    System.out.println("start writing to host");
+                    this.out.write(("HTTP/1.1 200 connection " + 
+                            "established\r\n\r\n").getBytes("ASCII7"));
+                    this.out.flush();
+                    System.out.println("to client: HTTP/1.1 200 " +
+                            "connection established\\r\\n\\r\\n");
+                    try{
+                        out_ser.write(req.toString().getBytes("ASCII7"));
+                        System.out.println("request headers written");
+                        while(( read = in.read(buffer) ) >= 0){
+                            out_ser.write(buffer, 0, read);
+                        }
+                        out_ser.flush();
+                    } catch(IOException ioe){
+                        ioe.printStackTrace();
+                    }
+                } catch(IOException ioe){
+                    ioe.printStackTrace();
+                }
+            }
+            
+            Start.ALLOWED.remove(Thread.currentThread());
+        } else{
+            System.out.println("server socket listening for new request");
+            try(Socket s = Start.LOCAL_SERVER.accept();
+                        InputStream in = s.getInputStream();
+                        OutputStream out = s.getOutputStream()){
+                System.out.println("-----     -----");
+                System.out.println("request received");
+                System.out.println("start processing");
+                
+                new Thread(THIS).start();
+                
+                // s.setSoTimeout(10000);
+                
+                Start agent = new Start(s, in, out);
+                new Thread(agent).start();
+                int i = 0;
+                do{
+                    try{
+                        Thread.sleep(1000);
+                    } catch(InterruptedException ie){
+                        ie.printStackTrace();
+                    }
+                } while(i++ < 5
+                        && agent.server == null
+                        && !agent.processed);
+                if(agent.processing){
+                    i = 0;
+                    while(!agent.processed && i++ < 5){
+                        try{
+                            Thread.sleep(1000);
+                        } catch(InterruptedException ie){
+                            ie.printStackTrace();
+                        }
+                    }
+                } else if(agent.server == null){
+                    System.out.println("host socket creation failed");
+                    return;
+                } else{
+                    try(InputStream in_ser = agent.server.getInputStream()){
+                        System.out.println("start writing to client");
+                        int read;
+                        byte buffer[] = new byte[1024];
+                        System.out.println("response:");
+                        while(( read = in_ser.read(buffer) ) >= 0){
+                            System.out.println(new String(buffer, 0, read));
+                            out.write(buffer, 0, read);
+                            out.flush();
+                        }
+                    }
+                }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            } catch(Exception e){
+                e.printStackTrace();
+            }
         }
-        // new Thread(THIS).start(); // replaced while loop
-        
-        /*
-        try{
-            Thread.currentThread().getContextClassLoader().loadClass(
-                    "Start").getMethod("start", JFrame.class, File.class
-                    ).invoke(null, Start.FRAME, Start.DATA_DIRECTORY);
-        } catch(Exception e){
-            e.printStackTrace();
-        }
-        */
+        System.out.println("finished");
     }
     public static String getInputString(InputStream in){
         try(Scanner scan = new Scanner(in).useDelimiter("\\A")){
@@ -705,7 +812,7 @@ implements java.awt.event.WindowListener, Runnable
             method_name = "performGet";
             ctc = cp.get(class_name);
             m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore("{System.out.println(\"performGet: \" + $1);}");
+            m.insertBefore("{System.out.println(\"GET(Http): \" + $1);}");
             ctc.toClass();
             ctc.detach();
         } catch(Exception e){
@@ -815,6 +922,7 @@ implements java.awt.event.WindowListener, Runnable
                 System.out.println(LOCAL_SERVER.getLocalSocketAddress());
                 System.out.println("use custom proxy");
                 if(Start.LOCAL_SERVER != null){
+                    Start.RESTRICT = true;
                     Thread t = new Thread(THIS);
                     t.start();
                     ALLOWED.add(t);
@@ -834,7 +942,6 @@ implements java.awt.event.WindowListener, Runnable
             }
             */
             
-            RESTRICT = false;
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
                     PasswordAuthentication.class, String[].class,
@@ -905,9 +1012,9 @@ implements java.awt.event.WindowListener, Runnable
                     return null;}).get();
     @Override public synchronized void write(int b){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
-        Start.OUT.print(new String(Character.toChars(b)));
-        if(Start.FRAME.isDisplayable()){
-            Start.TEXT.append(new String(Character.toChars(b)));
+        Start.OUT.print(Character.toString((char)b));
+        if(Start.TEXT.isDisplayable()){
+            Start.TEXT.append(Character.toString((char)b));
         }
         if(Start.DEBUG && LOG != null) try{
             Start.LOG.write(b);
