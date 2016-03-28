@@ -17,7 +17,7 @@ java.net.Proxy is required
 using invocationhandler for the implementation of redirecting system.out
 */
 
-public class Start extends OutputStream
+public class Start extends PrintStream
 implements java.awt.event.WindowListener, Runnable,
 HandshakeCompletedListener
 // , ClassFileTransformer
@@ -107,8 +107,8 @@ HandshakeCompletedListener
                 //if(INST != null) Start.FRAME.setVisible(true);
                 Start.FRAME.setVisible(true);
                 
-                System.setOut(new PrintStream(THIS));
-                System.setErr(new PrintStream(THIS));
+                System.setOut(new Start(OUT, false));
+                System.setErr(new Start(ERR, true));
                 /*
                 System.setOut((PrintStream)
                         java.lang.reflect.Proxy.newProxyInstance(
@@ -146,6 +146,8 @@ HandshakeCompletedListener
             }).get();
     
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
+    private static boolean DOWNLOAD =
+            "true".equals(CONFIG.get("download"));
     
     public static final File DATA_DIRECTORY = ((
             java.util.function.Supplier<File>)() ->{
@@ -226,106 +228,114 @@ HandshakeCompletedListener
             Start.exit();
         } catch(IOException ioe){}
         try{
-            HttpsURLConnection connection = (HttpsURLConnection)
-                    Start.LAUNCHER_URL.openConnection(
-                        java.net.Proxy.NO_PROXY);
-            connection.setUseCaches(false);
-            connection.setDefaultUseCaches(false);
-            connection.setRequestProperty("Cache-Control",
-                    "no-store,max-age=0,no-cache");
-            connection.setRequestProperty("Expires", "0");
-            connection.setRequestProperty("Pragma", "no-cache");
-            
-            long start = System.nanoTime();
-            connection.connect();
-            long elapsed = System.nanoTime() - start;
-            System.out.println("Got reply in: " +
-                    elapsed / 1000000L + "ms");
-            
-            if(!Start.LAUNCHER_PACK.exists()){
-                Start.LAUNCHER_PACK.getParentFile().mkdirs();
-                Start.LAUNCHER_PACK.createNewFile();
-            }
-            
-            InputStream inputStream = connection.getInputStream();
-            FileOutputStream outputStream =
-                    new FileOutputStream(Start.LAUNCHER_PACK);
-            
-            long startDownload = System.nanoTime();
-            long bytesRead = 0L;
-            byte[] buffer = new byte[65536];
-            try {
-                int read = inputStream.read(buffer);
-                    while (read >= 1) {
-                    bytesRead += read;
-                    outputStream.write(buffer, 0, read);
-                    read = inputStream.read(buffer);
+            if(DOWNLOAD){
+                HttpsURLConnection connection = (HttpsURLConnection)
+                        Start.LAUNCHER_URL.openConnection(
+                            java.net.Proxy.NO_PROXY);
+                connection.setUseCaches(false);
+                connection.setDefaultUseCaches(false);
+                connection.setRequestProperty("Cache-Control",
+                        "no-store,max-age=0,no-cache");
+                connection.setRequestProperty("Expires", "0");
+                connection.setRequestProperty("Pragma", "no-cache");
+                
+                long start = System.nanoTime();
+                connection.connect();
+                long elapsed = System.nanoTime() - start;
+                System.out.println("Got reply in: " +
+                        elapsed / 1000000L + "ms");
+                
+                if(!Start.LAUNCHER_PACK.exists()){
+                    Start.LAUNCHER_PACK.getParentFile().mkdirs();
+                    Start.LAUNCHER_PACK.createNewFile();
                 }
-            } finally {
-                inputStream.close();
-                outputStream.close();
-            }
-            long elapsedDownload = System.nanoTime() - startDownload;
-            
-            float elapsedSeconds = (float)(1L + elapsedDownload) / 1.0E9F;
-            float kbRead = (float)bytesRead / 1024.0F;
-            System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
-                    Float.valueOf(kbRead), (int)elapsedSeconds,
-                    Float.valueOf(kbRead / elapsedSeconds)
-            );
-            
-            String packPath = Start.LAUNCHER_PACK.getAbsolutePath();
-            if(packPath.endsWith(".lzma")){
-                packPath = packPath.substring(0, packPath.length() - 5);
-            }
-            File unpacked = new File(packPath);
-            if(!unpacked.exists()){
-                unpacked.getParentFile().mkdirs();
-                unpacked.createNewFile();
-            }
-            
-            System.out.println("reversing LZMA on " +
-                    Start.LAUNCHER_PACK + " to " + packPath);
-            Class<?> lzma_in = null;
-            try{
-                lzma_in = Start.class.getClassLoader().loadClass(
-                        "LZMA.LzmaInputStream");
-                /*
-                Class.forName("LZMA.LzmaInputStream",
-                        true, Start.class.getClassLoader());
-                */
-                if(lzma_in == null)
-                    System.out.println("class not initialized");
-                else
-                    System.out.println(lzma_in.getConstructor(
-                            InputStream.class));
-            } catch(ClassNotFoundException|NoSuchMethodException e){
-                e.printStackTrace();
-            }
-            try(InputStream in = (InputStream)lzma_in.getConstructor(
-                        InputStream.class).newInstance(
-                        new FileInputStream(Start.LAUNCHER_PACK));
-                        OutputStream out = new FileOutputStream(unpacked)){
-                byte buff[] = new byte[65536];
-                int read = in.read(buff); // do while? nah
-                while(read >= 1){
-                    out.write(buff, 0, read);
-                    read = in.read(buff);
+                
+                InputStream inputStream = connection.getInputStream();
+                FileOutputStream outputStream =
+                        new FileOutputStream(Start.LAUNCHER_PACK);
+                
+                long startDownload = System.nanoTime();
+                long bytesRead = 0L;
+                byte[] buffer = new byte[65536];
+                try {
+                    int read = inputStream.read(buffer);
+                        while (read >= 1) {
+                        bytesRead += read;
+                        outputStream.write(buffer, 0, read);
+                        read = inputStream.read(buffer);
+                    }
+                } finally {
+                    inputStream.close();
+                    outputStream.close();
                 }
-            } catch(Exception e){
-                e.printStackTrace();
+                long elapsedDownload = System.nanoTime() - startDownload;
+                
+                float elapsedSeconds = (float)(1L +
+                        elapsedDownload) / 1.0E9F;
+                float kbRead = (float)bytesRead / 1024.0F;
+                System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
+                        Float.valueOf(kbRead), (int)elapsedSeconds,
+                        Float.valueOf(kbRead / elapsedSeconds)
+                );
+                
+                String packPath = Start.LAUNCHER_PACK.getAbsolutePath();
+                if(packPath.endsWith(".lzma")){
+                    packPath = packPath.substring(0, packPath.length() - 5);
+                }
+                File unpacked = new File(packPath);
+                if(!unpacked.exists()){
+                    unpacked.getParentFile().mkdirs();
+                    unpacked.createNewFile();
+                }
+                
+                System.out.println("reversing LZMA on " +
+                        Start.LAUNCHER_PACK + " to " + packPath);
+                Class<?> lzma_in = null;
+                try{
+                    lzma_in = Start.class.getClassLoader().loadClass(
+                            "LZMA.LzmaInputStream");
+                    /*
+                    Class.forName("LZMA.LzmaInputStream",
+                            true, Start.class.getClassLoader());
+                    */
+                    if(lzma_in == null)
+                        System.out.println("class not initialized");
+                    else
+                        System.out.println(lzma_in.getConstructor(
+                                InputStream.class));
+                } catch(ClassNotFoundException|NoSuchMethodException e){
+                    e.printStackTrace();
+                }
+                try(InputStream in = (InputStream)lzma_in.getConstructor(
+                            InputStream.class).newInstance(
+                            new FileInputStream(Start.LAUNCHER_PACK));
+                            OutputStream out =
+                            new FileOutputStream(unpacked)){
+                    byte buff[] = new byte[65536];
+                    int read = in.read(buff); // do while? nah
+                    while(read >= 1){
+                        out.write(buff, 0, read);
+                        read = in.read(buff);
+                    }
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+                System.out.println("unpacking " +
+                        unpacked + " to " + Start.LAUNCHER_JAR);
+                try(java.util.jar.JarOutputStream jar_out =
+                        new java.util.jar.JarOutputStream(
+                        new FileOutputStream(Start.LAUNCHER_JAR))){
+                    java.util.jar.Pack200.newUnpacker()
+                            .unpack(unpacked, jar_out);
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+                Files.deleteIfExists(unpacked.toPath());
+            } else{
+                System.out.println("config: download=false");
+                System.out.println(
+                        "download & unpack launcher.jar skipped");
             }
-            System.out.println("unpacking " +
-                    unpacked + " to " + Start.LAUNCHER_JAR);
-            try(java.util.jar.JarOutputStream jar_out =
-                    new java.util.jar.JarOutputStream(
-                    new FileOutputStream(Start.LAUNCHER_JAR))){
-                java.util.jar.Pack200.newUnpacker()
-                        .unpack(unpacked, jar_out);
-            } catch(Exception e){
-                e.printStackTrace();
-            }
-            Files.deleteIfExists(unpacked.toPath());
             
             System.out.println("adding & deleting files in launcher.jar");
             /*
@@ -471,11 +481,20 @@ HandshakeCompletedListener
     private OutputStream out = null;
     private Socket server = null;
     private boolean processing = false, processed = false;
-    public Start(){}
+    
+    private boolean isErr;
+    public Start(){
+        super(new ByteArrayOutputStream());
+    }
     public Start(Socket client, InputStream in, OutputStream out){
+        super(new ByteArrayOutputStream());
         this.client = client;
         this.in = in;
         this.out = out;
+    }
+    public Start(PrintStream ps, boolean isErr){
+        super(ps);
+        this.isErr = isErr;
     }
     static{
         /*
@@ -668,7 +687,6 @@ HandshakeCompletedListener
             
             Start.ALLOWED.remove(Thread.currentThread());
         } else{
-            RESTRICT = false;
             System.out.println("server socket listening for new request");
             try(Socket s = Start.LOCAL_SERVER.accept();
                         InputStream in = s.getInputStream();
@@ -989,16 +1007,54 @@ HandshakeCompletedListener
         return method.invoke(Start.OUT, args);
     }
 */
-//* OutputStream
+//* PrintStream
     private static Thread MAIN;
     private static List<Thread> ALLOWED = new LinkedList<Thread> ();
     private static boolean RESTRICT = false;
-    private static final OutputStream LOG = ((
-            java.util.function.Supplier<OutputStream>)() ->{
-                    if(Start.DEBUG) try{ return new FileOutputStream(
+    private static final PrintStream LOG = ((
+            java.util.function.Supplier<PrintStream>)() ->{
+                    if(Start.DEBUG){ try{ return new PrintStream(
                     new File(Start.PARENT_DIRECTORY, "start.log"));
-                    } catch(FileNotFoundException fnfe){}
+                    } catch(FileNotFoundException fnfe){
+                    } catch(SecurityException se){}
+                    OUT.println("logging creation failed");} // if ends
                     return null;}).get();
+    @Override public synchronized PrintStream printf(
+            String format, Object... args){
+        if(RESTRICT && !ALLOWED.contains(
+                Thread.currentThread())) return this;
+        (isErr ? ERR : OUT).printf(format, args);
+        if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
+        if(Start.DEBUG && LOG != null) LOG.printf(format, args);
+        return this;
+    }
+    // primary methods are print(String) and println()
+    // avoided super to prevent unpredicted behaviour
+    @Override public synchronized void print(String s){
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print(s);
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append(s);
+        if(Start.DEBUG && LOG != null) LOG.print(s);
+    }
+    @Override public synchronized void println(){
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).println();
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append("\n");
+        if(Start.DEBUG && LOG != null) LOG.println();
+    }
+    @Override public synchronized void println(Object obj){
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print("" + obj + "\n");
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append("" + obj + "\n");
+        if(Start.DEBUG && LOG != null) LOG.println(obj);
+    }
+    @Override public synchronized void println(String ln){
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print(ln + "\n");
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append(ln + "\n");
+        if(Start.DEBUG && LOG != null) LOG.println(ln);
+    }
+    /* OutputStream
     @Override public synchronized void write(int b){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         Start.OUT.print(Character.toString((char)b));
@@ -1009,6 +1065,7 @@ HandshakeCompletedListener
             Start.LOG.write(b);
         } catch(IOException ioe){}
     }
+    */
 //*/
 
     private static void exit(){
