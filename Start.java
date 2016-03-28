@@ -518,7 +518,7 @@ HandshakeCompletedListener
             System.out.println("request headers:");
             System.out.println(req);
             
-            String lines[] = req.toString().split("\r\n");
+            String lines[] = req.toString().split("\\r?\\n");
             String uri = lines[0].split(" ", 3)[1];
             String host = null;
             int port = 80;
@@ -668,6 +668,7 @@ HandshakeCompletedListener
             
             Start.ALLOWED.remove(Thread.currentThread());
         } else{
+            RESTRICT = false;
             System.out.println("server socket listening for new request");
             try(Socket s = Start.LOCAL_SERVER.accept();
                         InputStream in = s.getInputStream();
@@ -812,7 +813,13 @@ HandshakeCompletedListener
             method_name = "performGet";
             ctc = cp.get(class_name);
             m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore("{System.out.println(\"GET(Http): \" + $1);}");
+            String target = "https://launchermeta.mojang.com/" +
+                    "mc/game/version_manifest.json";
+            m.insertBefore("{" +
+                    "System.out.println(\"GET(Http): \" + $1);" +
+                    "if(\"" + target + "\".equals($1.toString()))" +
+                    "$2 = java.net.Proxy.NO_PROXY;" +
+            "}");
             ctc.toClass();
             ctc.detach();
         } catch(Exception e){
@@ -906,15 +913,7 @@ HandshakeCompletedListener
         
         try{
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
-            //*
             try{
-                /*
-                Start.LOCAL_SERVER = SocketFactory.getDefault()
-                        .createServerSocket(8080);
-                SocketAddress address =
-                        LOCAL_SERVER.getLocalSocketAddress();
-                LOCAL_SERVER.bind(address);
-                */
                 Start.LOCAL_SERVER = new ServerSocket(8080);
                 
                 proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
@@ -927,20 +926,10 @@ HandshakeCompletedListener
                     t.start();
                     ALLOWED.add(t);
                 }
+                
             } catch(IOException ioe){
                 ioe.printStackTrace();
             }
-            /*****/
-            /*
-            try{
-                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
-                        new InetSocketAddress(InetAddress.getByName(
-                        "pzou.win/"), 443));
-                System.out.println("use custom proxy");
-            } catch(Exception e){
-                e.printStackTrace();
-            }
-            */
             
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
