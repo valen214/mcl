@@ -17,9 +17,8 @@ java.net.Proxy is required
 using invocationhandler for the implementation of redirecting system.out
 */
 
-public class Start extends OutputStream
-implements java.awt.event.WindowListener, Runnable,
-HandshakeCompletedListener
+public class Start extends PrintStream
+implements java.awt.event.WindowListener
 // , ClassFileTransformer
 // , InvocationHandler
 {
@@ -107,8 +106,8 @@ HandshakeCompletedListener
                 //if(INST != null) Start.FRAME.setVisible(true);
                 Start.FRAME.setVisible(true);
                 
-                System.setOut(new PrintStream(THIS));
-                System.setErr(new PrintStream(THIS));
+                System.setOut(new Start(OUT, false));
+                System.setErr(new Start(ERR, true));
                 /*
                 System.setOut((PrintStream)
                         java.lang.reflect.Proxy.newProxyInstance(
@@ -146,6 +145,8 @@ HandshakeCompletedListener
             }).get();
     
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
+    private static boolean DOWNLOAD =
+            "true".equals(CONFIG.get("download"));
     
     public static final File DATA_DIRECTORY = ((
             java.util.function.Supplier<File>)() ->{
@@ -226,106 +227,114 @@ HandshakeCompletedListener
             Start.exit();
         } catch(IOException ioe){}
         try{
-            HttpsURLConnection connection = (HttpsURLConnection)
-                    Start.LAUNCHER_URL.openConnection(
+            if(DOWNLOAD){
+                HttpsURLConnection connection = (HttpsURLConnection)
+                        Start.LAUNCHER_URL.openConnection(
                         java.net.Proxy.NO_PROXY);
-            connection.setUseCaches(false);
-            connection.setDefaultUseCaches(false);
-            connection.setRequestProperty("Cache-Control",
-                    "no-store,max-age=0,no-cache");
-            connection.setRequestProperty("Expires", "0");
-            connection.setRequestProperty("Pragma", "no-cache");
-            
-            long start = System.nanoTime();
-            connection.connect();
-            long elapsed = System.nanoTime() - start;
-            System.out.println("Got reply in: " +
-                    elapsed / 1000000L + "ms");
-            
-            if(!Start.LAUNCHER_PACK.exists()){
-                Start.LAUNCHER_PACK.getParentFile().mkdirs();
-                Start.LAUNCHER_PACK.createNewFile();
-            }
-            
-            InputStream inputStream = connection.getInputStream();
-            FileOutputStream outputStream =
-                    new FileOutputStream(Start.LAUNCHER_PACK);
-            
-            long startDownload = System.nanoTime();
-            long bytesRead = 0L;
-            byte[] buffer = new byte[65536];
-            try {
-                int read = inputStream.read(buffer);
-                    while (read >= 1) {
-                    bytesRead += read;
-                    outputStream.write(buffer, 0, read);
-                    read = inputStream.read(buffer);
+                connection.setUseCaches(false);
+                connection.setDefaultUseCaches(false);
+                connection.setRequestProperty("Cache-Control",
+                        "no-store,max-age=0,no-cache");
+                connection.setRequestProperty("Expires", "0");
+                connection.setRequestProperty("Pragma", "no-cache");
+                
+                long start = System.nanoTime();
+                connection.connect();
+                long elapsed = System.nanoTime() - start;
+                System.out.println("Got reply in: " +
+                        elapsed / 1000000L + "ms");
+                
+                if(!Start.LAUNCHER_PACK.exists()){
+                    Start.LAUNCHER_PACK.getParentFile().mkdirs();
+                    Start.LAUNCHER_PACK.createNewFile();
                 }
-            } finally {
-                inputStream.close();
-                outputStream.close();
-            }
-            long elapsedDownload = System.nanoTime() - startDownload;
             
-            float elapsedSeconds = (float)(1L + elapsedDownload) / 1.0E9F;
-            float kbRead = (float)bytesRead / 1024.0F;
-            System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
-                    Float.valueOf(kbRead), (int)elapsedSeconds,
-                    Float.valueOf(kbRead / elapsedSeconds)
-            );
-            
-            String packPath = Start.LAUNCHER_PACK.getAbsolutePath();
-            if(packPath.endsWith(".lzma")){
-                packPath = packPath.substring(0, packPath.length() - 5);
-            }
-            File unpacked = new File(packPath);
-            if(!unpacked.exists()){
-                unpacked.getParentFile().mkdirs();
-                unpacked.createNewFile();
-            }
-            
-            System.out.println("reversing LZMA on " +
-                    Start.LAUNCHER_PACK + " to " + packPath);
-            Class<?> lzma_in = null;
-            try{
-                lzma_in = Start.class.getClassLoader().loadClass(
-                        "LZMA.LzmaInputStream");
-                /*
-                Class.forName("LZMA.LzmaInputStream",
-                        true, Start.class.getClassLoader());
-                */
-                if(lzma_in == null)
-                    System.out.println("class not initialized");
-                else
-                    System.out.println(lzma_in.getConstructor(
-                            InputStream.class));
-            } catch(ClassNotFoundException|NoSuchMethodException e){
-                e.printStackTrace();
-            }
-            try(InputStream in = (InputStream)lzma_in.getConstructor(
-                        InputStream.class).newInstance(
-                        new FileInputStream(Start.LAUNCHER_PACK));
-                        OutputStream out = new FileOutputStream(unpacked)){
-                byte buff[] = new byte[65536];
-                int read = in.read(buff); // do while? nah
-                while(read >= 1){
-                    out.write(buff, 0, read);
-                    read = in.read(buff);
+                InputStream inputStream = connection.getInputStream();
+                FileOutputStream outputStream =
+                        new FileOutputStream(Start.LAUNCHER_PACK);
+                
+                long startDownload = System.nanoTime();
+                long bytesRead = 0L;
+                byte[] buffer = new byte[65536];
+                try {
+                    int read = inputStream.read(buffer);
+                        while (read >= 1) {
+                        bytesRead += read;
+                        outputStream.write(buffer, 0, read);
+                        read = inputStream.read(buffer);
+                    }
+                } finally {
+                    inputStream.close();
+                    outputStream.close();
                 }
-            } catch(Exception e){
-                e.printStackTrace();
+                long elapsedDownload = System.nanoTime() - startDownload;
+                
+                float elapsedSeconds = (float)(1L +
+                        elapsedDownload) / 1.0E9F;
+                float kbRead = (float)bytesRead / 1024.0F;
+                System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
+                        Float.valueOf(kbRead), (int)elapsedSeconds,
+                        Float.valueOf(kbRead / elapsedSeconds)
+                );
+                
+                String packPath = Start.LAUNCHER_PACK.getAbsolutePath();
+                if(packPath.endsWith(".lzma")){
+                    packPath = packPath.substring(0, packPath.length() - 5);
+                }
+                File unpacked = new File(packPath);
+                if(!unpacked.exists()){
+                    unpacked.getParentFile().mkdirs();
+                    unpacked.createNewFile();
+                }
+                
+                System.out.println("reversing LZMA on " +
+                        Start.LAUNCHER_PACK + " to " + packPath);
+                Class<?> lzma_in = null;
+                try{
+                    lzma_in = Start.class.getClassLoader().loadClass(
+                            "LZMA.LzmaInputStream");
+                    /*
+                    Class.forName("LZMA.LzmaInputStream",
+                            true, Start.class.getClassLoader());
+                    */
+                    if(lzma_in == null)
+                        System.out.println("class not initialized");
+                    else
+                        System.out.println(lzma_in.getConstructor(
+                                InputStream.class));
+                } catch(ClassNotFoundException|NoSuchMethodException e){
+                    e.printStackTrace();
+                }
+                try(InputStream in = (InputStream)lzma_in.getConstructor(
+                            InputStream.class).newInstance(
+                            new FileInputStream(Start.LAUNCHER_PACK));
+                            OutputStream out =
+                            new FileOutputStream(unpacked)){
+                    byte buff[] = new byte[65536];
+                    int read = in.read(buff); // do while? nah
+                    while(read >= 1){
+                        out.write(buff, 0, read);
+                        read = in.read(buff);
+                    }
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+                System.out.println("unpacking " +
+                        unpacked + " to " + Start.LAUNCHER_JAR);
+                try(java.util.jar.JarOutputStream jar_out =
+                        new java.util.jar.JarOutputStream(
+                        new FileOutputStream(Start.LAUNCHER_JAR))){
+                    java.util.jar.Pack200.newUnpacker()
+                            .unpack(unpacked, jar_out);
+                } catch(Exception e){
+                    e.printStackTrace();
+                }
+                Files.deleteIfExists(unpacked.toPath());
+            } else{
+                System.out.println("config: download=false");
+                System.out.println(
+                        "download & unpack launcher.jar skipped");
             }
-            System.out.println("unpacking " +
-                    unpacked + " to " + Start.LAUNCHER_JAR);
-            try(java.util.jar.JarOutputStream jar_out =
-                    new java.util.jar.JarOutputStream(
-                    new FileOutputStream(Start.LAUNCHER_JAR))){
-                java.util.jar.Pack200.newUnpacker()
-                        .unpack(unpacked, jar_out);
-            } catch(Exception e){
-                e.printStackTrace();
-            }
-            Files.deleteIfExists(unpacked.toPath());
             
             System.out.println("adding & deleting files in launcher.jar");
             /*
@@ -453,283 +462,13 @@ HandshakeCompletedListener
     
     
     
-    
-/**
- * 
- * run
- * 
- */
-    private static SSLSocketFactory SSL_FACTORY =
-            (SSLSocketFactory)SSLSocketFactory.getDefault();
-    private static ServerSocket LOCAL_SERVER = null;
-    private static SSLServerSocket LOCAL_SERVER_SSL = null;
-    private static final Map<String, String> HANDLER =
-            new HashMap<String, String> ();
-            
-    private Socket client = null;
-    private InputStream in = null;
-    private OutputStream out = null;
-    private Socket server = null;
-    private boolean processing = false, processed = false;
-    public Start(){}
-    public Start(Socket client, InputStream in, OutputStream out){
-        this.client = client;
-        this.in = in;
-        this.out = out;
+    private boolean isErr;
+    public Start(){
+        super(new ByteArrayOutputStream());
     }
-    static{
-        /*
-        HANDLER.put("launchermeta.mojang.com", String.join("\r\n",
-                "GET /mc/game/version_manifest.json HTTP/1.1",
-                "Host: launchermeta.mojang.com", ""));
-        */
-        HANDLER.put("launchermeta.mojang.com",
-                "https://launchermeta.mojang.com" +
-                "/mc/game/version_manifest.json");
-        HANDLER.put("", "");
-    }
-    @Override public void handshakeCompleted(
-            HandshakeCompletedEvent event) {
-        System.out.println("Handshake finished!");
-        System.out.println(
-            "CipherSuite:" + event.getCipherSuite());
-        System.out.println(
-            "SessionId " + event.getSession());
-        System.out.println(
-            "PeerHost " + event.getSession().getPeerHost());
-    }
-    @Override public void run(){
-        if(this.client != null){
-            Start.ALLOWED.add(Thread.currentThread());
-            
-            int read;
-            byte buffer[] = new byte[1024];
-            StringBuilder req = new StringBuilder();
-            try{
-                while(!req.toString().endsWith("\r\n\r\n")
-                && ( read = in.read(buffer) ) >= 0){
-                    req.append(new String(buffer, 0, read));
-                }
-            } catch(IOException ioe){
-                ioe.printStackTrace();
-            }
-            
-            System.out.println("-----     -----");
-            System.out.println("request headers:");
-            System.out.println(req);
-            
-            String lines[] = req.toString().split("\\r?\\n");
-            String uri = lines[0].split(" ", 3)[1];
-            String host = null;
-            int port = 80;
-            
-            if(lines[0].startsWith("CONNECT")){
-                if(uri.contains(":")){
-                    host = uri.substring(0, uri.indexOf(":"));
-                    port = Integer.parseInt(
-                            uri.substring(uri.indexOf(":") + 1));
-                }
-                for(String ln : lines){
-                    if(ln.startsWith("Host: ") && host == null){
-                        host = ln.replaceFirst("Host: ", "");
-                    } else if(ln.equals("Connection: keep-alive")
-                    || ln.equals("Proxy-Connection: keep-alive")){
-                        try{
-                            this.client.setKeepAlive(true);
-                        } catch(SocketException se){
-                            se.printStackTrace();
-                        }
-                    }
-                }
-            } else{
-                if(uri.startsWith("/")){
-                    for(String ln : lines){
-                        if(ln.startsWith("Host: ")){
-                            host = ln.replaceFirst("Host: ", "") + uri;
-                        }
-                    }
-                } else{
-                    host = uri;
-                }
-                // out.write("HTTP/1.1 501 Not Implemented");
-            }
-            System.out.println("host: " + host);
-            if("launchermeta.mojang.com".equals(host)){
-                this.processing = true;
-                System.out.println("launchermeta.mojang.com requested");
-                System.out.println("redirect request with response:");
-                StringBuilder result = new StringBuilder();
-                try{
-                    System.out.println(this.client);
-                    out.write(("HTTP/1.1 200 " +
-                            "Connection Established\r\n\r\n").getBytes());
-                    out.flush();
-                    
-                    buffer = new byte[1024];
-                    System.out.println("follow-up request:");
-                    while(( read = in.read(buffer) ) >= 0){
-                        System.out.println(new String(buffer, 0, read));
-                    }
-                    
-                    /*
-                    this.client.setReuseAddress(true);
-                    SSLSocket sslclient = (SSLSocket)SSL_FACTORY
-                            .createSocket(this.client, in, true);
-                    System.out.println(sslclient);
-                    sslclient.addHandshakeCompletedListener(THIS);
-                    sslclient.startHandshake();
-                    
-                    buffer = new byte[1024];
-                    req = new StringBuilder();
-                    try{
-                        while(( read = in.read(buffer) ) >= 0){
-                            req.append(new String(buffer, 0, read));
-                        }
-                    } catch(IOException ioe){
-                        ioe.printStackTrace();
-                    }
-                    System.out.println("request: ");
-                    System.out.println(req);
-                    
-                    /*/
-                    URL url = new URL(Start.HANDLER.get(host));
-                    HttpsURLConnection con = (HttpsURLConnection)
-                            url.openConnection();
-                    
-                    con.setRequestMethod("GET");
-                    
-                    for(String key : con.getRequestProperties().keySet()){
-                        System.out.printf("headers: %s: %s\n", key,
-                                con.getRequestProperty(key).toString());
-                    }
-                    
-                    
-                    BufferedReader br = new BufferedReader(
-                            new InputStreamReader(
-                            con.getInputStream()));
-                    String line;
-                    
-                    result.append(String.join("\r\n",
-                            "HTTP/1.1 200 OK",
-                            "Content-Length: " +
-                            con.getContentLength(),
-                            "Content-Type: application/json",
-                            "Connection: close", ""));
-                    while((line = br.readLine()) != null){
-                        result.append(line);
-                    }
-                    result.append("\r\n\r\n");
-                    
-                    for(String key : con.getHeaderFields().keySet()){
-                        System.out.printf("headers: %s: %s\n",
-                                key, con.getHeaderField(key).toString());
-                    }
-                    br.close();
-                    out.write(result.toString().getBytes(),
-                            0, result.length());
-                    out.flush();
-                    /*****/
-                } catch(IOException ioe){
-                    ioe.printStackTrace();
-                }
-                this.processed = true;
-            } else{
-                try{
-                    this.server = new Socket(host, port);
-                } catch(IOException ioe){
-                    System.out.println("cannot create host socket");
-                    System.out.println("host processed: " + host);
-                    ioe.printStackTrace();
-                    Start.ALLOWED.remove(Thread.currentThread());
-                    return;
-                }
-                System.out.println("host socket created: " + this.server);
-                try(OutputStream out_ser = this.server.getOutputStream()){
-                    System.out.println("start writing to host");
-                    this.out.write(("HTTP/1.1 200 connection " + 
-                            "established\r\n\r\n").getBytes("ASCII7"));
-                    this.out.flush();
-                    System.out.println("to client: HTTP/1.1 200 " +
-                            "connection established\\r\\n\\r\\n");
-                    try{
-                        out_ser.write(req.toString().getBytes("ASCII7"));
-                        System.out.println("request headers written");
-                        while(( read = in.read(buffer) ) >= 0){
-                            out_ser.write(buffer, 0, read);
-                        }
-                        out_ser.flush();
-                    } catch(IOException ioe){
-                        ioe.printStackTrace();
-                    }
-                } catch(IOException ioe){
-                    ioe.printStackTrace();
-                }
-            }
-            
-            Start.ALLOWED.remove(Thread.currentThread());
-        } else{
-            RESTRICT = false;
-            System.out.println("server socket listening for new request");
-            try(Socket s = Start.LOCAL_SERVER.accept();
-                        InputStream in = s.getInputStream();
-                        OutputStream out = s.getOutputStream()){
-                System.out.println("-----     -----");
-                System.out.println("request received");
-                System.out.println("start processing");
-                
-                new Thread(THIS).start();
-                
-                // s.setSoTimeout(10000);
-                
-                Start agent = new Start(s, in, out);
-                new Thread(agent).start();
-                int i = 0;
-                do{
-                    try{
-                        Thread.sleep(1000);
-                    } catch(InterruptedException ie){
-                        ie.printStackTrace();
-                    }
-                } while(i++ < 5
-                        && agent.server == null
-                        && !agent.processed);
-                if(agent.processing){
-                    i = 0;
-                    while(!agent.processed && i++ < 5){
-                        try{
-                            Thread.sleep(1000);
-                        } catch(InterruptedException ie){
-                            ie.printStackTrace();
-                        }
-                    }
-                } else if(agent.server == null){
-                    System.out.println("host socket creation failed");
-                    return;
-                } else{
-                    try(InputStream in_ser = agent.server.getInputStream()){
-                        System.out.println("start writing to client");
-                        int read;
-                        byte buffer[] = new byte[1024];
-                        System.out.println("response:");
-                        while(( read = in_ser.read(buffer) ) >= 0){
-                            System.out.println(new String(buffer, 0, read));
-                            out.write(buffer, 0, read);
-                            out.flush();
-                        }
-                    }
-                }
-            } catch(IOException ioe){
-                ioe.printStackTrace();
-            } catch(Exception e){
-                e.printStackTrace();
-            }
-        }
-        System.out.println("finished");
-    }
-    public static String getInputString(InputStream in){
-        try(Scanner scan = new Scanner(in).useDelimiter("\\A")){
-            return (scan.hasNext() ? scan.next() : null);
-        }
+    public Start(PrintStream ps, boolean isErr){
+        super(ps);
+        this.isErr = isErr;
     }
     
     // profile related
@@ -747,15 +486,12 @@ HandshakeCompletedListener
 		"2cf8f4e0-f6ee-4e5b-9d44-04d51861fa12"
 	};
     */
-	public static final String[] ACCESS_TOKEN = new String[1];
-    /*
-    {
+	public static final String[] ACCESS_TOKEN = {
 		"aff3101b2d8d43bbb42fab2e6e993e28",
 		"07b2bed918164d8ab3c2c7a2206127f1",
 		"aabd49d956d74f4da4eb22b6821fdf85",
 		"ddbba250e9f7400895f1bafcb3361e60"
 	};
-    */
     
     
     
@@ -769,6 +505,7 @@ HandshakeCompletedListener
         Thread.currentThread().setContextClassLoader(cl);
         String class_name = "com.mojang.authlib.HttpAuthenticationService";
         String method_name = "constantURL";
+        String target = "";
         Class<?> constants = null;
         
         try{
@@ -794,7 +531,21 @@ HandshakeCompletedListener
             
             method_name = "performPostRequest";
             m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore("{System.out.println(\"POST(AS): \" + $1);}");
+            m.insertBefore(String.format(
+                    "{System.out.println(\"POST(AS): \" + $1);" +
+                    "System.out.println(\"payload: \" + $2);" +
+                    "if($1.toString().endsWith(\"/validate\"))" +
+                    "return \"HTTP/1.1 204 No Content\\r\\n\\r\\n\";" +
+                    "if($1.toString().endsWith(\"/refresh\"))" +
+                    "return \"{\\\"clientToken\\\":\\\"%1$s\\\"," +
+                            "\\\"accessToken\\\":\\\"%2$s\\\"," +
+                            "\\\"availableProfiles\\\":[{" +
+                            "\\\"id\\\":\\\"%3$s\\\"," +
+                            "\\\"name\\\":\\\"%4$s\\\"" +
+                    "}],\\\"selectedProfile\\\":{\\\"id\\\":\\\"%3$s\\\"," +
+                    "\\\"name\\\":\\\"%4$s\\\"}}\";}",
+                    Start.CLIENT_TOKEN[0], Start.ACCESS_TOKEN[1],
+                    Start.UUID[0].replace("-", ""), name));
             
             ctc.toClass();
             ctc.detach();
@@ -813,7 +564,7 @@ HandshakeCompletedListener
             method_name = "performGet";
             ctc = cp.get(class_name);
             m = ctc.getDeclaredMethod(method_name);
-            String target = "https://launchermeta.mojang.com/" +
+            target = "https://launchermeta.mojang.com/" +
                     "mc/game/version_manifest.json";
             m.insertBefore("{" +
                     "System.out.println(\"GET(Http): \" + $1);" +
@@ -872,7 +623,7 @@ HandshakeCompletedListener
         } catch(Exception e){
             e.printStackTrace();
         }
-        //*
+        /*
         try{
             Class<?> c = null;
             // session service modification
@@ -913,23 +664,6 @@ HandshakeCompletedListener
         
         try{
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
-            try{
-                Start.LOCAL_SERVER = new ServerSocket(8080);
-                
-                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
-                        Start.LOCAL_SERVER.getLocalSocketAddress());
-                System.out.println(LOCAL_SERVER.getLocalSocketAddress());
-                System.out.println("use custom proxy");
-                if(Start.LOCAL_SERVER != null){
-                    Start.RESTRICT = true;
-                    Thread t = new Thread(THIS);
-                    t.start();
-                    ALLOWED.add(t);
-                }
-                
-            } catch(IOException ioe){
-                ioe.printStackTrace();
-            }
             
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
@@ -989,16 +723,46 @@ HandshakeCompletedListener
         return method.invoke(Start.OUT, args);
     }
 */
-//* OutputStream
+//* PrintStream
     private static Thread MAIN;
-    private static List<Thread> ALLOWED = new LinkedList<Thread> ();
-    private static boolean RESTRICT = false;
-    private static final OutputStream LOG = ((
-            java.util.function.Supplier<OutputStream>)() ->{
-                    if(Start.DEBUG) try{ return new FileOutputStream(
+    private static final PrintStream LOG = ((
+            java.util.function.Supplier<PrintStream>)() ->{
+                    if(Start.DEBUG){ try{ return new PrintStream(
                     new File(Start.PARENT_DIRECTORY, "start.log"));
-                    } catch(FileNotFoundException fnfe){}
+                    } catch(FileNotFoundException fnfe){
+                    } catch(SecurityException se){}
+                    OUT.println("logging creation failed");} // if ends
                     return null;}).get();
+    @Override public synchronized PrintStream printf(
+            String format, Object... args){
+        (isErr ? ERR : OUT).printf(format, args);
+        if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
+        if(Start.DEBUG && LOG != null) LOG.printf(format, args);
+        return this;
+    }
+    // primary methods are print(String) and println()
+    // avoided super to prevent unpredicted behaviour
+    @Override public synchronized void print(String s){
+        (isErr ? ERR : OUT).print(s);
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append(s);
+        if(Start.DEBUG && LOG != null) LOG.print(s);
+    }
+    @Override public synchronized void println(){
+        (isErr ? ERR : OUT).println();
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append("\n");
+        if(Start.DEBUG && LOG != null) LOG.println();
+    }
+    @Override public synchronized void println(Object obj){
+        (isErr ? ERR : OUT).print("" + obj + "\n");
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append("" + obj + "\n");
+        if(Start.DEBUG && LOG != null) LOG.println(obj);
+    }
+    @Override public synchronized void println(String ln){
+        (isErr ? ERR : OUT).print(ln + "\n");
+        if(Start.TEXT.isDisplayable()) Start.TEXT.append(ln + "\n");
+        if(Start.DEBUG && LOG != null) LOG.println(ln);
+    }
+    /* OutputStream
     @Override public synchronized void write(int b){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         Start.OUT.print(Character.toString((char)b));
@@ -1009,13 +773,12 @@ HandshakeCompletedListener
             Start.LOG.write(b);
         } catch(IOException ioe){}
     }
+    */
 //*/
 
     private static void exit(){
         System.out.println("programme exit");
         if(Start.FRAME != null) Start.FRAME.dispose();
-        if(Start.LOCAL_SERVER != null) try{ Start.LOCAL_SERVER.close();
-        } catch(IOException ioe){}
         System.exit(0);
     }
 }
