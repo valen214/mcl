@@ -765,15 +765,12 @@ HandshakeCompletedListener
 		"2cf8f4e0-f6ee-4e5b-9d44-04d51861fa12"
 	};
     */
-	public static final String[] ACCESS_TOKEN = new String[1];
-    /*
-    {
+	public static final String[] ACCESS_TOKEN = {
 		"aff3101b2d8d43bbb42fab2e6e993e28",
 		"07b2bed918164d8ab3c2c7a2206127f1",
 		"aabd49d956d74f4da4eb22b6821fdf85",
 		"ddbba250e9f7400895f1bafcb3361e60"
 	};
-    */
     
     
     
