@@ -18,7 +18,8 @@ using invocationhandler for the implementation of redirecting system.out
 */
 
 public class Start extends PrintStream
-implements java.awt.event.WindowListener
+implements java.awt.event.WindowListener, Runnable,
+HandshakeCompletedListener
 // , ClassFileTransformer
 // , InvocationHandler
 {
@@ -230,7 +231,7 @@ implements java.awt.event.WindowListener
             if(DOWNLOAD){
                 HttpsURLConnection connection = (HttpsURLConnection)
                         Start.LAUNCHER_URL.openConnection(
-                        java.net.Proxy.NO_PROXY);
+                            java.net.Proxy.NO_PROXY);
                 connection.setUseCaches(false);
                 connection.setDefaultUseCaches(false);
                 connection.setRequestProperty("Cache-Control",
@@ -248,7 +249,7 @@ implements java.awt.event.WindowListener
                     Start.LAUNCHER_PACK.getParentFile().mkdirs();
                     Start.LAUNCHER_PACK.createNewFile();
                 }
-            
+                
                 InputStream inputStream = connection.getInputStream();
                 FileOutputStream outputStream =
                         new FileOutputStream(Start.LAUNCHER_PACK);
@@ -263,7 +264,7 @@ implements java.awt.event.WindowListener
                         outputStream.write(buffer, 0, read);
                         read = inputStream.read(buffer);
                     }
-                } finally{
+                } finally {
                     inputStream.close();
                     outputStream.close();
                 }
@@ -462,13 +463,291 @@ implements java.awt.event.WindowListener
     
     
     
+    
+/**
+ * 
+ * run
+ * 
+ */
+    private static SSLSocketFactory SSL_FACTORY =
+            (SSLSocketFactory)SSLSocketFactory.getDefault();
+    private static ServerSocket LOCAL_SERVER = null;
+    private static SSLServerSocket LOCAL_SERVER_SSL = null;
+    private static final Map<String, String> HANDLER =
+            new HashMap<String, String> ();
+            
+    private Socket client = null;
+    private InputStream in = null;
+    private OutputStream out = null;
+    private Socket server = null;
+    private boolean processing = false, processed = false;
+    
     private boolean isErr;
     public Start(){
         super(new ByteArrayOutputStream());
     }
+    public Start(Socket client, InputStream in, OutputStream out){
+        super(new ByteArrayOutputStream());
+        this.client = client;
+        this.in = in;
+        this.out = out;
+    }
     public Start(PrintStream ps, boolean isErr){
         super(ps);
         this.isErr = isErr;
+    }
+    static{
+        /*
+        HANDLER.put("launchermeta.mojang.com", String.join("\r\n",
+                "GET /mc/game/version_manifest.json HTTP/1.1",
+                "Host: launchermeta.mojang.com", ""));
+        */
+        HANDLER.put("launchermeta.mojang.com",
+                "https://launchermeta.mojang.com" +
+                "/mc/game/version_manifest.json");
+        HANDLER.put("", "");
+    }
+    @Override public void handshakeCompleted(
+            HandshakeCompletedEvent event) {
+        System.out.println("Handshake finished!");
+        System.out.println(
+            "CipherSuite:" + event.getCipherSuite());
+        System.out.println(
+            "SessionId " + event.getSession());
+        System.out.println(
+            "PeerHost " + event.getSession().getPeerHost());
+    }
+    @Override public void run(){
+        if(this.client != null){
+            Start.ALLOWED.add(Thread.currentThread());
+            
+            int read;
+            byte buffer[] = new byte[1024];
+            StringBuilder req = new StringBuilder();
+            try{
+                while(!req.toString().endsWith("\r\n\r\n")
+                && ( read = in.read(buffer) ) >= 0){
+                    req.append(new String(buffer, 0, read));
+                }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            }
+            
+            System.out.println("-----     -----");
+            System.out.println("request headers:");
+            System.out.println(req);
+            
+            String lines[] = req.toString().split("\\r?\\n");
+            String uri = lines[0].split(" ", 3)[1];
+            String host = null;
+            int port = 80;
+            
+            if(lines[0].startsWith("CONNECT")){
+                if(uri.contains(":")){
+                    host = uri.substring(0, uri.indexOf(":"));
+                    port = Integer.parseInt(
+                            uri.substring(uri.indexOf(":") + 1));
+                }
+                for(String ln : lines){
+                    if(ln.startsWith("Host: ") && host == null){
+                        host = ln.replaceFirst("Host: ", "");
+                    } else if(ln.equals("Connection: keep-alive")
+                    || ln.equals("Proxy-Connection: keep-alive")){
+                        try{
+                            this.client.setKeepAlive(true);
+                        } catch(SocketException se){
+                            se.printStackTrace();
+                        }
+                    }
+                }
+            } else{
+                if(uri.startsWith("/")){
+                    for(String ln : lines){
+                        if(ln.startsWith("Host: ")){
+                            host = ln.replaceFirst("Host: ", "") + uri;
+                        }
+                    }
+                } else{
+                    host = uri;
+                }
+                // out.write("HTTP/1.1 501 Not Implemented");
+            }
+            System.out.println("host: " + host);
+            if("launchermeta.mojang.com".equals(host)){
+                this.processing = true;
+                System.out.println("launchermeta.mojang.com requested");
+                System.out.println("redirect request with response:");
+                StringBuilder result = new StringBuilder();
+                try{
+                    System.out.println(this.client);
+                    out.write(("HTTP/1.1 200 " +
+                            "Connection Established\r\n\r\n").getBytes());
+                    out.flush();
+                    
+                    buffer = new byte[1024];
+                    System.out.println("follow-up request:");
+                    while(( read = in.read(buffer) ) >= 0){
+                        System.out.println(new String(buffer, 0, read));
+                    }
+                    
+                    /*
+                    this.client.setReuseAddress(true);
+                    SSLSocket sslclient = (SSLSocket)SSL_FACTORY
+                            .createSocket(this.client, in, true);
+                    System.out.println(sslclient);
+                    sslclient.addHandshakeCompletedListener(THIS);
+                    sslclient.startHandshake();
+                    
+                    buffer = new byte[1024];
+                    req = new StringBuilder();
+                    try{
+                        while(( read = in.read(buffer) ) >= 0){
+                            req.append(new String(buffer, 0, read));
+                        }
+                    } catch(IOException ioe){
+                        ioe.printStackTrace();
+                    }
+                    System.out.println("request: ");
+                    System.out.println(req);
+                    
+                    /*/
+                    URL url = new URL(Start.HANDLER.get(host));
+                    HttpsURLConnection con = (HttpsURLConnection)
+                            url.openConnection();
+                    
+                    con.setRequestMethod("GET");
+                    
+                    for(String key : con.getRequestProperties().keySet()){
+                        System.out.printf("headers: %s: %s\n", key,
+                                con.getRequestProperty(key).toString());
+                    }
+                    
+                    
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(
+                            con.getInputStream()));
+                    String line;
+                    
+                    result.append(String.join("\r\n",
+                            "HTTP/1.1 200 OK",
+                            "Content-Length: " +
+                            con.getContentLength(),
+                            "Content-Type: application/json",
+                            "Connection: close", ""));
+                    while((line = br.readLine()) != null){
+                        result.append(line);
+                    }
+                    result.append("\r\n\r\n");
+                    
+                    for(String key : con.getHeaderFields().keySet()){
+                        System.out.printf("headers: %s: %s\n",
+                                key, con.getHeaderField(key).toString());
+                    }
+                    br.close();
+                    out.write(result.toString().getBytes(),
+                            0, result.length());
+                    out.flush();
+                    /*****/
+                } catch(IOException ioe){
+                    ioe.printStackTrace();
+                }
+                this.processed = true;
+            } else{
+                try{
+                    this.server = new Socket(host, port);
+                } catch(IOException ioe){
+                    System.out.println("cannot create host socket");
+                    System.out.println("host processed: " + host);
+                    ioe.printStackTrace();
+                    Start.ALLOWED.remove(Thread.currentThread());
+                    return;
+                }
+                System.out.println("host socket created: " + this.server);
+                try(OutputStream out_ser = this.server.getOutputStream()){
+                    System.out.println("start writing to host");
+                    this.out.write(("HTTP/1.1 200 connection " + 
+                            "established\r\n\r\n").getBytes("ASCII7"));
+                    this.out.flush();
+                    System.out.println("to client: HTTP/1.1 200 " +
+                            "connection established\\r\\n\\r\\n");
+                    try{
+                        out_ser.write(req.toString().getBytes("ASCII7"));
+                        System.out.println("request headers written");
+                        while(( read = in.read(buffer) ) >= 0){
+                            out_ser.write(buffer, 0, read);
+                        }
+                        out_ser.flush();
+                    } catch(IOException ioe){
+                        ioe.printStackTrace();
+                    }
+                } catch(IOException ioe){
+                    ioe.printStackTrace();
+                }
+            }
+            
+            Start.ALLOWED.remove(Thread.currentThread());
+        } else{
+            System.out.println("server socket listening for new request");
+            try(Socket s = Start.LOCAL_SERVER.accept();
+                        InputStream in = s.getInputStream();
+                        OutputStream out = s.getOutputStream()){
+                System.out.println("-----     -----");
+                System.out.println("request received");
+                System.out.println("start processing");
+                
+                new Thread(THIS).start();
+                
+                // s.setSoTimeout(10000);
+                
+                Start agent = new Start(s, in, out);
+                new Thread(agent).start();
+                int i = 0;
+                do{
+                    try{
+                        Thread.sleep(1000);
+                    } catch(InterruptedException ie){
+                        ie.printStackTrace();
+                    }
+                } while(i++ < 5
+                        && agent.server == null
+                        && !agent.processed);
+                if(agent.processing){
+                    i = 0;
+                    while(!agent.processed && i++ < 5){
+                        try{
+                            Thread.sleep(1000);
+                        } catch(InterruptedException ie){
+                            ie.printStackTrace();
+                        }
+                    }
+                } else if(agent.server == null){
+                    System.out.println("host socket creation failed");
+                    return;
+                } else{
+                    try(InputStream in_ser = agent.server.getInputStream()){
+                        System.out.println("start writing to client");
+                        int read;
+                        byte buffer[] = new byte[1024];
+                        System.out.println("response:");
+                        while(( read = in_ser.read(buffer) ) >= 0){
+                            System.out.println(new String(buffer, 0, read));
+                            out.write(buffer, 0, read);
+                            out.flush();
+                        }
+                    }
+                }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            } catch(Exception e){
+                e.printStackTrace();
+            }
+        }
+        System.out.println("finished");
+    }
+    public static String getInputString(InputStream in){
+        try(Scanner scan = new Scanner(in).useDelimiter("\\A")){
+            return (scan.hasNext() ? scan.next() : null);
+        }
     }
     
     // profile related
@@ -505,7 +784,6 @@ implements java.awt.event.WindowListener
         Thread.currentThread().setContextClassLoader(cl);
         String class_name = "com.mojang.authlib.HttpAuthenticationService";
         String method_name = "constantURL";
-        String target = "";
         Class<?> constants = null;
         
         try{
@@ -531,21 +809,7 @@ implements java.awt.event.WindowListener
             
             method_name = "performPostRequest";
             m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore(String.format(
-                    "{System.out.println(\"POST(AS): \" + $1);" +
-                    "System.out.println(\"payload: \" + $2);" +
-                    "if($1.toString().endsWith(\"/validate\"))" +
-                    "return \"HTTP/1.1 204 No Content\\r\\n\\r\\n\";" +
-                    "if($1.toString().endsWith(\"/refresh\"))" +
-                    "return \"{\\\"clientToken\\\":\\\"%1$s\\\"," +
-                            "\\\"accessToken\\\":\\\"%2$s\\\"," +
-                            "\\\"availableProfiles\\\":[{" +
-                            "\\\"id\\\":\\\"%3$s\\\"," +
-                            "\\\"name\\\":\\\"%4$s\\\"" +
-                    "}],\\\"selectedProfile\\\":{\\\"id\\\":\\\"%3$s\\\"," +
-                    "\\\"name\\\":\\\"%4$s\\\"}}\";}",
-                    Start.CLIENT_TOKEN[0], Start.ACCESS_TOKEN[1],
-                    Start.UUID[0].replace("-", ""), name));
+            m.insertBefore("{System.out.println(\"POST(AS): \" + $1);}");
             
             ctc.toClass();
             ctc.detach();
@@ -564,7 +828,7 @@ implements java.awt.event.WindowListener
             method_name = "performGet";
             ctc = cp.get(class_name);
             m = ctc.getDeclaredMethod(method_name);
-            target = "https://launchermeta.mojang.com/" +
+            String target = "https://launchermeta.mojang.com/" +
                     "mc/game/version_manifest.json";
             m.insertBefore("{" +
                     "System.out.println(\"GET(Http): \" + $1);" +
@@ -623,7 +887,7 @@ implements java.awt.event.WindowListener
         } catch(Exception e){
             e.printStackTrace();
         }
-        /*
+        //*
         try{
             Class<?> c = null;
             // session service modification
@@ -664,6 +928,23 @@ implements java.awt.event.WindowListener
         
         try{
             java.net.Proxy proxy = java.net.Proxy.NO_PROXY;
+            try{
+                Start.LOCAL_SERVER = new ServerSocket(8080);
+                
+                proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                        Start.LOCAL_SERVER.getLocalSocketAddress());
+                System.out.println(LOCAL_SERVER.getLocalSocketAddress());
+                System.out.println("use custom proxy");
+                if(Start.LOCAL_SERVER != null){
+                    Start.RESTRICT = true;
+                    Thread t = new Thread(THIS);
+                    t.start();
+                    ALLOWED.add(t);
+                }
+                
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            }
             
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
@@ -725,7 +1006,8 @@ implements java.awt.event.WindowListener
 */
 //* PrintStream
     private static Thread MAIN;
-
+    private static List<Thread> ALLOWED = new LinkedList<Thread> ();
+    private static boolean RESTRICT = false;
     private static final PrintStream LOG = ((
             java.util.function.Supplier<PrintStream>)() ->{
                     if(Start.DEBUG){ try{ return new PrintStream(
@@ -736,7 +1018,8 @@ implements java.awt.event.WindowListener
                     return null;}).get();
     @Override public synchronized PrintStream printf(
             String format, Object... args){
-
+        if(RESTRICT && !ALLOWED.contains(
+                Thread.currentThread())) return this;
         (isErr ? ERR : OUT).printf(format, args);
         if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
         if(Start.DEBUG && LOG != null) LOG.printf(format, args);
@@ -745,25 +1028,25 @@ implements java.awt.event.WindowListener
     // primary methods are print(String) and println()
     // avoided super to prevent unpredicted behaviour
     @Override public synchronized void print(String s){
-
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print(s);
         if(Start.TEXT.isDisplayable()) Start.TEXT.append(s);
         if(Start.DEBUG && LOG != null) LOG.print(s);
     }
     @Override public synchronized void println(){
-
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).println();
         if(Start.TEXT.isDisplayable()) Start.TEXT.append("\n");
         if(Start.DEBUG && LOG != null) LOG.println();
     }
     @Override public synchronized void println(Object obj){
-
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print("" + obj + "\n");
         if(Start.TEXT.isDisplayable()) Start.TEXT.append("" + obj + "\n");
         if(Start.DEBUG && LOG != null) LOG.println(obj);
     }
     @Override public synchronized void println(String ln){
-
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print(ln + "\n");
         if(Start.TEXT.isDisplayable()) Start.TEXT.append(ln + "\n");
         if(Start.DEBUG && LOG != null) LOG.println(ln);
@@ -785,6 +1068,8 @@ implements java.awt.event.WindowListener
     private static void exit(){
         System.out.println("programme exit");
         if(Start.FRAME != null) Start.FRAME.dispose();
+        if(Start.LOCAL_SERVER != null) try{ Start.LOCAL_SERVER.close();
+        } catch(IOException ioe){}
         System.exit(0);
     }
 }
