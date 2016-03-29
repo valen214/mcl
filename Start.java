@@ -18,8 +18,7 @@ using invocationhandler for the implementation of redirecting system.out
 */
 
 public class Start extends PrintStream
-implements java.awt.event.WindowListener, Runnable,
-HandshakeCompletedListener
+implements java.awt.event.WindowListener
 // , ClassFileTransformer
 // , InvocationHandler
 {
