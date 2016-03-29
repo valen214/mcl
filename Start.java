@@ -725,6 +725,7 @@ implements java.awt.event.WindowListener
 */
 //* PrintStream
     private static Thread MAIN;
+
     private static final PrintStream LOG = ((
             java.util.function.Supplier<PrintStream>)() ->{
                     if(Start.DEBUG){ try{ return new PrintStream(
@@ -735,6 +736,7 @@ implements java.awt.event.WindowListener
                     return null;}).get();
     @Override public synchronized PrintStream printf(
             String format, Object... args){
+
         (isErr ? ERR : OUT).printf(format, args);
         if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
         if(Start.DEBUG && LOG != null) LOG.printf(format, args);
@@ -743,21 +745,25 @@ implements java.awt.event.WindowListener
     // primary methods are print(String) and println()
     // avoided super to prevent unpredicted behaviour
     @Override public synchronized void print(String s){
+
         (isErr ? ERR : OUT).print(s);
         if(Start.TEXT.isDisplayable()) Start.TEXT.append(s);
         if(Start.DEBUG && LOG != null) LOG.print(s);
     }
     @Override public synchronized void println(){
+
         (isErr ? ERR : OUT).println();
         if(Start.TEXT.isDisplayable()) Start.TEXT.append("\n");
         if(Start.DEBUG && LOG != null) LOG.println();
     }
     @Override public synchronized void println(Object obj){
+
         (isErr ? ERR : OUT).print("" + obj + "\n");
         if(Start.TEXT.isDisplayable()) Start.TEXT.append("" + obj + "\n");
         if(Start.DEBUG && LOG != null) LOG.println(obj);
     }
     @Override public synchronized void println(String ln){
+
         (isErr ? ERR : OUT).print(ln + "\n");
         if(Start.TEXT.isDisplayable()) Start.TEXT.append(ln + "\n");
         if(Start.DEBUG && LOG != null) LOG.println(ln);
