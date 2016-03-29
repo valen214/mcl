@@ -263,7 +263,7 @@ implements java.awt.event.WindowListener
                         outputStream.write(buffer, 0, read);
                         read = inputStream.read(buffer);
                     }
-                } finally {
+                } finally{
                     inputStream.close();
                     outputStream.close();
                 }
