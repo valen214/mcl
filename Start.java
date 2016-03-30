@@ -9,7 +9,6 @@ import java.util.*;
 import javax.swing.*;
 import javax.net.ssl.*;
 import java.security.*;
-import javassist.*;
 
 /*
 extends OutputStream removed as implementation of
@@ -18,7 +17,7 @@ using invocationhandler for the implementation of redirecting system.out
 */
 
 public class Start extends PrintStream
-implements java.awt.event.WindowListener
+implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
 // , ClassFileTransformer
 // , InvocationHandler
 {
@@ -391,7 +390,6 @@ implements java.awt.event.WindowListener
             }
             
             System.out.println("starting launcher.");
-            //*
             try{
                 URLClassLoader cl = new URLClassLoader(new URL[] {
                         Start.LAUNCHER_JAR.toURI().toURL()
@@ -408,14 +406,6 @@ implements java.awt.event.WindowListener
             } catch(Exception e){
                 e.printStackTrace();
             }
-            /*/
-            Runtime.getRuntime().exec("java -jar \"" +
-                    Start.LAUNCHER_JAR.toPath() +
-                    "\" \"work_dir\" \"" +
-                    Start.DATA_DIRECTORY.toPath() +
-                    "\" \"name\" \"" + Start.getName(
-                    Start.DATA_DIRECTORY) + "\"");
-            /****/
         } catch(IOException ioe){
             ioe.printStackTrace();
         } finally{
@@ -781,61 +771,11 @@ implements java.awt.event.WindowListener
     public static void start(ClassLoader cl,
             JFrame frm, File data_dir, String name){
         Thread.currentThread().setContextClassLoader(cl);
-        String class_name = "com.mojang.authlib.HttpAuthenticationService";
-        String method_name = "constantURL";
         Class<?> constants = null;
         
         try{
-            ClassPool cp = ClassPool.getDefault();
-            LoaderClassPath lcp = new LoaderClassPath(cl);
-            ClassClassPath ccp = new ClassClassPath(Start.class);
-            cp.insertClassPath(lcp);
-            cp.insertClassPath(ccp);
-            System.out.println(lcp.find(class_name));
-            System.out.println(ccp.find(class_name));
-            System.out.println(cp.find(class_name));
-            
-            CtClass ctc = cp.get(class_name);
-            CtMethod m = ctc.getDeclaredMethod(method_name);
-            // m.setName(method_name + "$impl");
-            // CtMethod m1 = CtNewMethod.copy(m, method_name, auth, null);
-            m.insertBefore("{System.out.println(\"HttpAS: \" + $1);}");
-            // auth.writeFile();
-            
-            method_name = "performGetRequest";
-            m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore("{System.out.println(\"GET(AS): \" + $1);}");
-            
-            method_name = "performPostRequest";
-            m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore("{System.out.println(\"POST(AS): \" + $1);}");
-            
-            ctc.toClass();
-            ctc.detach();
-            
-            class_name = "net.minecraft.launcher.LauncherConstants";
-            method_name = "constantURL";
-            
-            ctc = cp.get(class_name);
-            m = ctc.getDeclaredMethod(method_name);
-            m.insertBefore(
-                    "{System.out.println(\"Constants: \" + $1);}");
-            constants = ctc.toClass();
-            ctc.detach();
-            
-            class_name = "com.mojang.launcher.Http";
-            method_name = "performGet";
-            ctc = cp.get(class_name);
-            m = ctc.getDeclaredMethod(method_name);
-            String target = "https://launchermeta.mojang.com/" +
-                    "mc/game/version_manifest.json";
-            m.insertBefore("{" +
-                    "System.out.println(\"GET(Http): \" + $1);" +
-                    "if(\"" + target + "\".equals($1.toString()))" +
-                    "$2 = java.net.Proxy.NO_PROXY;" +
-            "}");
-            ctc.toClass();
-            ctc.detach();
+            constants = cl.loadClass(
+                    "net.minecraft.launcher.LauncherConstants");
         } catch(Exception e){
             e.printStackTrace();
         }
@@ -878,8 +818,7 @@ implements java.awt.event.WindowListener
                     // constants.getPackage().getImplementationVersion() +
                     "1.6.61" +
                     "\",\n    \"format\": " + constants.getField(
-                    "VERSION_FORMAT").getInt(null) +
-                    "\n  }\n}").getBytes(),
+                    "VERSION_FORMAT").getInt(null) + "\n  }\n}").getBytes(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
