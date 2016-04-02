@@ -106,7 +106,7 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                 Start.FRAME.setVisible(true);
                 
                 System.setOut(new Start(OUT, false));
-                System.setErr(new Start(ERR, true));
+                // System.setErr(new Start(ERR, true));
                 /*
                 System.setOut((PrintStream)
                         java.lang.reflect.Proxy.newProxyInstance(
@@ -143,6 +143,13 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                 return map;
             }).get();
     
+    /*
+    start_config.ini
+        work_dir
+        download
+        debug
+        name
+    */
     private static boolean DEBUG = "true".equals(CONFIG.get("debug"));
     private static boolean DOWNLOAD =
             "true".equals(CONFIG.get("download"));
@@ -507,9 +514,63 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
             "PeerHost " + event.getSession().getPeerHost());
     }
     @Override public void run(){
-        if(this.client != null){
-            Start.ALLOWED.add(Thread.currentThread());
-            
+        Start.ALLOWED.add(Thread.currentThread());
+        if(this.client == null){
+            System.out.println("server socket listening for new request");
+            try(Socket s = Start.LOCAL_SERVER.accept();
+                        InputStream in = s.getInputStream();
+                        OutputStream out = s.getOutputStream()){
+                System.out.println("-----     -----");
+                System.out.println("request received");
+                System.out.println("start processing");
+                
+                new Thread(THIS).start();
+                
+                // s.setSoTimeout(10000);
+                
+                Start agent = new Start(s, in, out);
+                new Thread(agent).start();
+                int i = 0;
+                do{
+                    try{
+                        Thread.sleep(500);
+                    } catch(InterruptedException ie){
+                        ie.printStackTrace();
+                    }
+                } while(i++ < 5
+                        && agent.server == null
+                        && !agent.processing);
+                if(agent.processing){
+                    i = 0;
+                    while(!agent.processed && i++ < 5){
+                        try{
+                            Thread.sleep(1000);
+                        } catch(InterruptedException ie){
+                            ie.printStackTrace();
+                        }
+                    }
+                } else if(agent.server == null){
+                    System.out.println("host socket creation failed");
+                    return;
+                } else{
+                    try(InputStream in_ser = agent.server.getInputStream()){
+                        System.out.println("start writing to client");
+                        int read;
+                        byte buffer[] = new byte[1024];
+                        System.out.println("response:");
+                        while(( read = in_ser.read(buffer) ) >= 0){
+                            System.out.println(new String(buffer, 0, read));
+                            out.write(buffer, 0, read);
+                            out.flush();
+                        }
+                    }
+                }
+            } catch(IOException ioe){
+                ioe.printStackTrace();
+            } catch(Exception e){
+                e.printStackTrace();
+            }
+        } else{ // client != null
             int read;
             byte buffer[] = new byte[1024];
             StringBuilder req = new StringBuilder();
@@ -523,6 +584,7 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
             }
             
             System.out.println("-----     -----");
+            System.out.println("client: " + this.client);
             System.out.println("request headers:");
             System.out.println(req);
             
@@ -563,12 +625,38 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
             }
             System.out.println("host: " + host);
             if("launchermeta.mojang.com".equals(host)){
-                this.processing = true;
+                // this.processing = true;
                 System.out.println("launchermeta.mojang.com requested");
                 System.out.println("redirect request with response:");
+                System.out.println("client: " + this.client);
                 StringBuilder result = new StringBuilder();
                 try{
-                    System.out.println(this.client);
+                    //*
+                    SSLSocket sslclient = (SSLSocket)SSL_FACTORY
+                            .createSocket(this.client, host, 443, true);
+                    sslclient.setEnableSessionCreation(true);
+                    this.server = sslclient;
+                    System.out.println("sslclient: " + sslclient);
+                    
+                    buffer = new byte[1024];
+                    try(OutputStream out_ser = sslclient.getOutputStream()){
+                        out_ser.write(req.toString().getBytes());
+                        req = new StringBuilder();
+                        System.out.println("follow up request:");
+                        while(( read = in.read(buffer) ) >= 0){
+                            req.append(new String(buffer, 0, read));
+                            System.out.println(req);
+                            out_ser.write(buffer, 0, read);
+                        }
+                    } catch(IOException ioe){
+                        ioe.printStackTrace();
+                    }
+                    System.out.println("request: ");
+                    System.out.println(req);
+                    
+                    sslclient.addHandshakeCompletedListener(THIS);
+                    sslclient.startHandshake();
+                    /*/
                     out.write(("HTTP/1.1 200 " +
                             "Connection Established\r\n\r\n").getBytes());
                     out.flush();
@@ -579,27 +667,6 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                         System.out.println(new String(buffer, 0, read));
                     }
                     
-                    /*
-                    this.client.setReuseAddress(true);
-                    SSLSocket sslclient = (SSLSocket)SSL_FACTORY
-                            .createSocket(this.client, in, true);
-                    System.out.println(sslclient);
-                    sslclient.addHandshakeCompletedListener(THIS);
-                    sslclient.startHandshake();
-                    
-                    buffer = new byte[1024];
-                    req = new StringBuilder();
-                    try{
-                        while(( read = in.read(buffer) ) >= 0){
-                            req.append(new String(buffer, 0, read));
-                        }
-                    } catch(IOException ioe){
-                        ioe.printStackTrace();
-                    }
-                    System.out.println("request: ");
-                    System.out.println(req);
-                    
-                    /*/
                     URL url = new URL(Start.HANDLER.get(host));
                     HttpsURLConnection con = (HttpsURLConnection)
                             url.openConnection();
@@ -633,8 +700,7 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                                 key, con.getHeaderField(key).toString());
                     }
                     br.close();
-                    out.write(result.toString().getBytes(),
-                            0, result.length());
+                    out.write(result.toString().getBytes());
                     out.flush();
                     /*****/
                 } catch(IOException ioe){
@@ -673,65 +739,9 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                     ioe.printStackTrace();
                 }
             }
-            
-            Start.ALLOWED.remove(Thread.currentThread());
-        } else{
-            System.out.println("server socket listening for new request");
-            try(Socket s = Start.LOCAL_SERVER.accept();
-                        InputStream in = s.getInputStream();
-                        OutputStream out = s.getOutputStream()){
-                System.out.println("-----     -----");
-                System.out.println("request received");
-                System.out.println("start processing");
-                
-                new Thread(THIS).start();
-                
-                // s.setSoTimeout(10000);
-                
-                Start agent = new Start(s, in, out);
-                new Thread(agent).start();
-                int i = 0;
-                do{
-                    try{
-                        Thread.sleep(1000);
-                    } catch(InterruptedException ie){
-                        ie.printStackTrace();
-                    }
-                } while(i++ < 5
-                        && agent.server == null
-                        && !agent.processed);
-                if(agent.processing){
-                    i = 0;
-                    while(!agent.processed && i++ < 5){
-                        try{
-                            Thread.sleep(1000);
-                        } catch(InterruptedException ie){
-                            ie.printStackTrace();
-                        }
-                    }
-                } else if(agent.server == null){
-                    System.out.println("host socket creation failed");
-                    return;
-                } else{
-                    try(InputStream in_ser = agent.server.getInputStream()){
-                        System.out.println("start writing to client");
-                        int read;
-                        byte buffer[] = new byte[1024];
-                        System.out.println("response:");
-                        while(( read = in_ser.read(buffer) ) >= 0){
-                            System.out.println(new String(buffer, 0, read));
-                            out.write(buffer, 0, read);
-                            out.flush();
-                        }
-                    }
-                }
-            } catch(IOException ioe){
-                ioe.printStackTrace();
-            } catch(Exception e){
-                e.printStackTrace();
-            }
         }
         System.out.println("finished");
+        Start.ALLOWED.remove(Thread.currentThread());
     }
     public static String getInputString(InputStream in){
         try(Scanner scan = new Scanner(in).useDelimiter("\\A")){
@@ -815,8 +825,7 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                     "  \"selectedUser\": \"" +
                     Start.UUID[0].replace("-", "") +
                     "\",\n  \"launcherVersion\": {\n    \"name\": \"" + 
-                    // constants.getPackage().getImplementationVersion() +
-                    "1.6.61" +
+                    constants.getPackage().getImplementationVersion() +
                     "\",\n    \"format\": " + constants.getField(
                     "VERSION_FORMAT").getInt(null) + "\n  }\n}").getBytes(),
                     StandardOpenOption.CREATE,
@@ -825,7 +834,8 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
         } catch(Exception e){
             e.printStackTrace();
         }
-        //*
+        
+        /*
         try{
             Class<?> c = null;
             // session service modification
@@ -870,14 +880,12 @@ implements java.awt.event.WindowListener, Runnable, HandshakeCompletedListener
                 Start.LOCAL_SERVER = new ServerSocket(8080);
                 
                 proxy = new java.net.Proxy(java.net.Proxy.Type.HTTP,
-                        Start.LOCAL_SERVER.getLocalSocketAddress());
-                System.out.println(LOCAL_SERVER.getLocalSocketAddress());
-                System.out.println("use custom proxy");
+                        LOCAL_SERVER.getLocalSocketAddress());
+                System.out.println("use custom proxy at " +
+                        LOCAL_SERVER.getLocalSocketAddress());
                 if(Start.LOCAL_SERVER != null){
                     Start.RESTRICT = true;
-                    Thread t = new Thread(THIS);
-                    t.start();
-                    ALLOWED.add(t);
+                    new Thread(THIS).start();
                 }
                 
             } catch(IOException ioe){
