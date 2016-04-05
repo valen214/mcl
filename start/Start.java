@@ -173,11 +173,12 @@ public class Start
                         "download & unpack launcher.jar skipped");
             }
             
-            System.out.println("adding & deleting files in launcher.jar");
             /*
+            System.out.println("adding & deleting files in launcher.jar");
+            
             java.util.jar.JarFile launcher_jar =
                     new java.util.jar.JarFile(LAUNCHER_JAR);
-            */
+            
             URI launcher_uri = URI.create("jar:" + LAUNCHER_JAR.toURI());
             URI start_uri = URI.create(LOCATION_URL.toExternalForm());
             // fs: launcher.jar
@@ -215,19 +216,14 @@ public class Start
             } catch(IOException ioe){
                 ioe.printStackTrace();
             }
+            */
             
             System.out.println("starting launcher.");
             try{
                 URLClassLoader cl = new URLClassLoader(new URL[] {
                         LAUNCHER_JAR.toURI().toURL()
-                });//, Thread.currentThread().getContextClassLoader());
-                
-                Class<?> c = Class.forName("start.Start", false, cl);
-                
-                c.getMethod("start", ClassLoader.class, JFrame.class,
-                        File.class, String.class).invoke(
-                        null, cl, Console.FRAME, DATA_DIRECTORY,
-                        getName(DATA_DIRECTORY));
+                });
+                start(cl, Console.FRAME, DATA_DIRECTORY);
             } catch(Exception e){
                 e.printStackTrace();
             }
@@ -283,12 +279,10 @@ public class Start
      * start
      */
     public static void start(ClassLoader cl,
-            JFrame frm, File data_dir, String name){
-        System.out.println("LOCATION_URL: " + LOCATION_URL);
-        System.out.println("LOCATION_FILE: " + LOCATION_FILE);
-        Thread.currentThread().setContextClassLoader(cl);
-        Class<?> constants = null;
+            JFrame frm, File data_dir){
+        String name = getName(data_dir);
         
+        Class<?> constants = null;
         try{
             constants = cl.loadClass(
                     "net.minecraft.launcher.LauncherConstants");
@@ -307,7 +301,7 @@ public class Start
 
 
 
-        System.out.println("programme start at " + data_dir.getPath());
+        System.out.println("launcher start at " + data_dir.getPath());
         
         
         try{
@@ -389,13 +383,16 @@ public class Start
                 StartProxy.start();
             }
                 
-            
+            /*
+            Start.setStaticFieldValue(StartProxy.class,
+                    "PROXY", java.net.Proxy.NO_PROXY);
+            //*/
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
                     PasswordAuthentication.class, String[].class,
                     Integer.class).newInstance(frm, data_dir,
                     StartProxy.PROXY, null, new String[0],
-                    constants.getField( "SUPER_COOL_BOOTSTRAP_VERSION"
+                    constants.getField("SUPER_COOL_BOOTSTRAP_VERSION"
                     ).getInt(null));
         } catch(Exception e){
             System.out.println("Unable to start: ");
