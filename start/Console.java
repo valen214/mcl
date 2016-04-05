@@ -3,6 +3,7 @@ package start;
 
 import static start.StartConstants.*;
 
+import java.awt.Font;
 import java.io.*;
 import java.util.*;
 
@@ -13,6 +14,7 @@ implements java.awt.event.WindowListener
 {
     public static final PrintStream OUT = System.out;
     public static final PrintStream ERR = System.err;
+    private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
     public static List<Thread> ALLOWED = new LinkedList<Thread> ();
     public static boolean RESTRICT = false;
 

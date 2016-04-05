@@ -11,7 +11,7 @@ import javax.swing.*;
 
 public class StartConstants
 {
-    private static final URL LAUNCHER_URL = ((
+    public static final URL LAUNCHER_URL = ((
             java.util.function.Supplier<URL>)() ->{
                 try{ return new URL("https://s3.amazonaws.com/" +
                         "Minecraft.Download/launcher/launcher.pack.lzma");
@@ -51,7 +51,7 @@ public class StartConstants
                 Map<String, String> map = new HashMap<String, String> ();
                 try{
                     for(String line : Files.readAllLines(
-                            new File(Start.PARENT_DIRECTORY,
+                            new File(PARENT_DIRECTORY,
                             CONFIG_FILE_NAME).toPath())){
                         String elem[] = line.split("=", 2);
                         map.put(elem[0].toLowerCase(), elem[1]);
@@ -72,7 +72,7 @@ public class StartConstants
     public static final boolean DEBUG =
             "true".equals(CONFIG_MAP.get("debug"));
     public static final boolean DOWNLOAD =
-            "true".equals(CONFIG_MAP.get("download"));
+            !"false".equals(CONFIG_MAP.get("download"));
     public static final String WORK_DIR = CONFIG_MAP.get("work_dir");
     public static final String NAME = CONFIG_MAP.get("name");
     
@@ -101,7 +101,7 @@ public class StartConstants
                 return work_dir;
             }).get();
     public static final File LAUNCHER_PACK = new File(
-                Start.DATA_DIRECTORY, "launcher.pack.lzma");
+                DATA_DIRECTORY, "launcher.pack.lzma");
     public static final File LAUNCHER_JAR = new File(
-                Start.DATA_DIRECTORY, "launcher.jar");
+                DATA_DIRECTORY, "launcher.jar");
 }

@@ -9,14 +9,17 @@ public class StartProxy implements Runnable
 {
     public static final int PORT = 8080;
     
-    public static final SSLServerSocketFactory SERVER_SOCKET_FACTORY =
+    public static final SSLServerSocketFactory SSL_SERVER_SOCKET_FACTORY =
             (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
+    public static final SSLSocketFactory SSL_SOCKET_FACTORY =
+            (SSLSocketFactory) SSLSocketFactory.getDefault();
+            
             
     // Supplier<T> can be changed to ServerSocket
     public static final SSLServerSocket SERVER_SOCKET = ((
             java.util.function.Supplier<SSLServerSocket>)() ->{
                 try{ return (SSLServerSocket)
-                SERVER_SOCKET_FACTORY.createServerSocket(PORT);
+                SSL_SERVER_SOCKET_FACTORY.createServerSocket(PORT);
                 } catch(IOException ioe){} return null;
             }).get();
             
@@ -74,11 +77,13 @@ public class StartProxy implements Runnable
                         host = ln.replaceFirst("Host: ", "");
                     } else if(ln.equals("Connection: keep-alive")
                     || ln.equals("Proxy-Connection: keep-alive")){
+                        /*
                         try{
                             this.client.setKeepAlive(true);
                         } catch(SocketException se){
                             se.printStackTrace();
                         }
+                        */
                     }
                 }
             } else{
@@ -93,6 +98,11 @@ public class StartProxy implements Runnable
                 }
                 // out.write("HTTP/1.1 501 Not Implemented");
             }
+            
+            System.out.printf("uri identified: %s:%d\n", host, port);
+            Socket channel = SSL_SOCKET_FACTORY.createSocket(
+                    s, host, port, true);
+            
             
         } catch(Exception e){
             e.printStackTrace();
