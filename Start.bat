@@ -6,8 +6,8 @@
 
 @rem start-bitstransfer -source %url% -destination %root%\Start.jar
 
-if /i %COMPUTERNAME%=="ux32ln" (
-    load
+if /I "%COMPUTERNAME%"=="ux32ln" (
+    call load.bat
 )
 
 if exist "%root%Start.jar" (
@@ -32,11 +32,11 @@ if not exist "%root%Start.jar" (
 
 if not exist %cfg% (
     echo. >%cfg%
-    echo name=valen>%cfg%
-    echo download=true>%cfg%
-    echo work_dir=%root%.minecraft>%cfg%
-    echo debug=true>%cfg%
-    echo. >%cfg%
+    echo name=valen>>%cfg%
+    echo download=true>>%cfg%
+    echo work_dir=%root%>>%cfg%
+    echo debug=true>>%cfg%
+    echo. >>%cfg%
 )
 
 

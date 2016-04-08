@@ -8,14 +8,13 @@ import java.lang.reflect.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
-import java.util.stream.Stream;
 
 import javax.swing.*;
 import javax.net.ssl.*;
 
 import LZMA.*;
 
-public class Start
+public class Start implements Thread.UncaughtExceptionHandler
 {
     // profile related
 	public static final String[] UUID = new String[] {
@@ -38,8 +37,17 @@ public class Start
 		"aabd49d956d74f4da4eb22b6821fdf85",
 		"ddbba250e9f7400895f1bafcb3361e60"
 	};
-    public static void main(String args[]){
-        Console.RESTRICT = false;
+	public static final Start THIS = new Start();
+	static{
+	    System.out.println("start.Start referenced");
+	    Thread.currentThread().setUncaughtExceptionHandler(THIS);
+	    Console.RESTRICT = false;
+	}
+	public void uncaughtException(Thread t, Throwable e){
+	    e.printStackTrace();
+	}
+    public static void main(String args[]) throws Exception{
+	    Thread.currentThread().setUncaughtExceptionHandler(THIS);
         System.out.println("LOCATION_URL: " + LOCATION_URL);
         System.out.println("LOCATION_FILE: " + LOCATION_FILE);
         System.out.println("PARENT_DIRECTORY: " + PARENT_DIRECTORY);
@@ -48,26 +56,32 @@ public class Start
         Start.CLIENT_TOKEN[0] = "87584590-7ab6-40e7-9c0e-5f5a8501937a";
         Start.ACCESS_TOKEN[0] = "aff3101b2d8d43bbb42fab2e6e993e28";
         
+        String arg_str = "arguments: \"" +
+                String.join("\" \"", args) + "\"\n";
+        System.out.printf(arg_str);
+        
         if(DEBUG) try{
             Files.write(new File(PARENT_DIRECTORY,
-                    "start.log").toPath(), ("arguments: \"" +
-                    String.join("\" \"", args)).getBytes(),
+                    "start.log").toPath(), arg_str.getBytes(),
                     StandardOpenOption.APPEND,
                     StandardOpenOption.CREATE);
         } catch(IOException ioe){}
         
         // test existance of instance
         try{
-            new ServerSocket(65535, 5);
+            new ServerSocket(65535, 5).close();
         } catch(BindException be){
             System.out.println("launcher already started");
             Start.exit();
         } catch(IOException ioe){}
         try{
-            if(DOWNLOAD){
+            if(DOWNLOAD || !LAUNCHER_JAR.exists()
+                    || !LAUNCHER_JAR.isFile()){
                 HttpsURLConnection connection = (HttpsURLConnection)
                         LAUNCHER_URL.openConnection(
-                            java.net.Proxy.NO_PROXY);
+                        /*
+                        StartProxy.PROXY);
+                        /*/java.net.Proxy.NO_PROXY);//*/
                 connection.setUseCaches(false);
                 connection.setDefaultUseCaches(false);
                 connection.setRequestProperty("Cache-Control",
@@ -109,7 +123,7 @@ public class Start
                 float elapsedSeconds = (float)(1L +
                         elapsedDownload) / 1.0E9F;
                 float kbRead = (float)bytesRead / 1024.0F;
-                System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s",
+                System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s\n",
                         Float.valueOf(kbRead), (int)elapsedSeconds,
                         Float.valueOf(kbRead / elapsedSeconds)
                 );
@@ -126,24 +140,7 @@ public class Start
                 
                 System.out.println("reversing LZMA on " +
                         LAUNCHER_PACK + " to " + packPath);
-                Class<?> lzma_in = null;
-                try{
-                    lzma_in = Start.class.getClassLoader().loadClass(
-                            "LZMA.LzmaInputStream");
-                    /*
-                    Class.forName("LZMA.LzmaInputStream",
-                            true, Start.class.getClassLoader());
-                    */
-                    if(lzma_in == null)
-                        System.out.println("class not initialized");
-                    else
-                        System.out.println(lzma_in.getConstructor(
-                                InputStream.class));
-                } catch(ClassNotFoundException|NoSuchMethodException e){
-                    e.printStackTrace();
-                }
-                try(InputStream in = (InputStream)lzma_in.getConstructor(
-                            InputStream.class).newInstance(
+                try(InputStream in = (InputStream) new LzmaInputStream(
                             new FileInputStream(LAUNCHER_PACK));
                             OutputStream out =
                             new FileOutputStream(unpacked)){
@@ -158,6 +155,7 @@ public class Start
                 }
                 System.out.println("unpacking " +
                         unpacked + " to " + LAUNCHER_JAR);
+                
                 try(java.util.jar.JarOutputStream jar_out =
                         new java.util.jar.JarOutputStream(
                         new FileOutputStream(LAUNCHER_JAR))){
@@ -223,7 +221,7 @@ public class Start
                 URLClassLoader cl = new URLClassLoader(new URL[] {
                         LAUNCHER_JAR.toURI().toURL()
                 });
-                start(cl, Console.FRAME, DATA_DIRECTORY);
+                Start.start(cl, Console.FRAME, DATA_DIRECTORY);
             } catch(Exception e){
                 e.printStackTrace();
             }
@@ -269,7 +267,6 @@ public class Start
         }
         return name;
     }
-    
     
     
     
@@ -379,10 +376,10 @@ public class Start
             && StartProxy.PROXY != null){
                 System.out.println("use custom proxy at " +
                         StartProxy.ADDRESS);
-                Console.RESTRICT = true;
                 StartProxy.start();
+                Console.RESTRICT = true;
+                Console.remove();
             }
-                
             /*
             Start.setStaticFieldValue(StartProxy.class,
                     "PROXY", java.net.Proxy.NO_PROXY);
@@ -395,11 +392,13 @@ public class Start
                     constants.getField("SUPER_COOL_BOOTSTRAP_VERSION"
                     ).getInt(null));
         } catch(Exception e){
+            Console.allow();
             System.out.println("Unable to start: ");
             e.printStackTrace();
             e.fillInStackTrace().printStackTrace();
             exit();
         }
+        Console.allow();
         System.out.println("launcher started");
     }
     public static void setStaticFieldValue(

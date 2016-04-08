@@ -15,8 +15,24 @@ implements java.awt.event.WindowListener
     public static final PrintStream OUT = System.out;
     public static final PrintStream ERR = System.err;
     private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
+    private static OutputStream EMPTY = new ByteArrayOutputStream();
     public static List<Thread> ALLOWED = new LinkedList<Thread> ();
     public static boolean RESTRICT = false;
+    private static final PrintStream LOG = ((
+            java.util.function.Supplier<PrintStream>)() ->{
+                    if(DEBUG){ try{ return new PrintStream(
+                    new File(PARENT_DIRECTORY, "start.log"));
+                    } catch(FileNotFoundException fnfe){
+                    } catch(SecurityException se){}
+                    OUT.println("logging creation failed");} // if ends
+                    return null;}).get();
+    private static final PrintStream LOG_ERR = ((
+            java.util.function.Supplier<PrintStream>)() ->{
+                    if(DEBUG){ try{ return new PrintStream(
+                    new File(PARENT_DIRECTORY, "start.err.log"));
+                    } catch(Exception e){}
+                    OUT.println("err log stream creation failed");}
+                    return null;}).get();
 
     private static final Console THIS = new Console(OUT, false);
     public static final JFrame FRAME = ((
@@ -45,11 +61,21 @@ implements java.awt.event.WindowListener
                 //if(INST != null) FRAME.setVisible(true);
                 FRAME.setVisible(true);
                 
-                System.setOut(THIS);
-                // System.setErr(new Start(ERR, true));
                 return text;
             }).get();
 
+    public static void allow(){
+        ALLOWED.add(Thread.currentThread());
+    }
+    public static void remove(){
+        ALLOWED.remove(Thread.currentThread());
+    }
+    static{
+        System.setOut(THIS);
+        System.setErr(new Console(ERR, true));
+        System.out.println("start.Console referenced");
+    }
+    
     
     
 
@@ -77,22 +103,7 @@ implements java.awt.event.WindowListener
     }
 */
 //* PrintStream
-    private static final PrintStream LOG = ((
-            java.util.function.Supplier<PrintStream>)() ->{
-                    if(DEBUG){ try{ return new PrintStream(
-                    new File(PARENT_DIRECTORY, "start.log"));
-                    } catch(FileNotFoundException fnfe){
-                    } catch(SecurityException se){}
-                    OUT.println("logging creation failed");} // if ends
-                    return null;}).get();
-    private static final PrintStream LOG_ERR = ((
-            java.util.function.Supplier<PrintStream>)() ->{
-                    if(DEBUG){ try{ return new PrintStream(
-                    new File(PARENT_DIRECTORY, "start.err.log"));
-                    } catch(Exception e){}
-                    OUT.println("err log stream creation failed");}
-                    return null;}).get();
-    @Override public synchronized PrintStream printf(
+    @Override public PrintStream printf(
             String format, Object... args){
         if(RESTRICT && !ALLOWED.contains(
                 Thread.currentThread())) return this;
@@ -106,7 +117,7 @@ implements java.awt.event.WindowListener
     }
     // primary methods are print(String) and println()
     // avoided super to prevent unpredicted behaviour
-    @Override public synchronized void print(String s){
+    @Override public void print(String s){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print(s);
         if(TEXT.isDisplayable()) TEXT.append(s);
@@ -115,7 +126,7 @@ implements java.awt.event.WindowListener
             else if(!isErr && LOG != null) LOG.print(s);
         }
     }
-    @Override public synchronized void println(){
+    @Override public void println(){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).println();
         if(TEXT.isDisplayable()) TEXT.append("\n");
@@ -124,7 +135,7 @@ implements java.awt.event.WindowListener
             else if(!isErr && LOG != null) LOG.println();
         }
     }
-    @Override public synchronized void println(Object obj){
+    @Override public void println(Object obj){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print("" + obj + "\n");
         if(TEXT.isDisplayable()) TEXT.append("" + obj + "\n");
@@ -133,7 +144,7 @@ implements java.awt.event.WindowListener
             else if(!isErr && LOG != null) LOG.print(obj);
         }
     }
-    @Override public synchronized void println(String ln){
+    @Override public void println(String ln){
         if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
         (isErr ? ERR : OUT).print(ln + "\n");
         if(TEXT.isDisplayable()) TEXT.append(ln + "\n");
@@ -158,7 +169,7 @@ implements java.awt.event.WindowListener
 
     private final boolean isErr;
     public Console(PrintStream ps, boolean isErr){
-        super(ps, true);
+        super(LOG == null ? EMPTY : LOG, true);
         this.isErr = isErr;
     }
 }

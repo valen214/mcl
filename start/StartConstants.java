@@ -11,6 +11,9 @@ import javax.swing.*;
 
 public class StartConstants
 {
+    static{
+        System.out.println("start.StartConstants referenced");
+    }
     public static final URL LAUNCHER_URL = ((
             java.util.function.Supplier<URL>)() ->{
                 try{ return new URL("https://s3.amazonaws.com/" +
@@ -37,9 +40,7 @@ public class StartConstants
                 }
                 return null;
             }).get();
-    
-    public static final Font MONOSPACED = new Font("Monospaced", 0, 12);
-    
+
     // parent of this
     public static final File PARENT_DIRECTORY =
             (LOCATION_FILE.isFile() ?
@@ -53,10 +54,13 @@ public class StartConstants
                     for(String line : Files.readAllLines(
                             new File(PARENT_DIRECTORY,
                             CONFIG_FILE_NAME).toPath())){
-                        String elem[] = line.split("=", 2);
-                        map.put(elem[0].toLowerCase(), elem[1]);
-                        System.out.printf("key: %s, value: %s\n",
-                                elem[0], elem[1]);
+                        String elem[] = line.trim().replaceAll(
+                                "\\r", "").split("=", 2);
+                        if(elem.length == 2){
+                            map.put(elem[0].toLowerCase(), elem[1]);
+                            System.out.printf("key: %s, value: %s\n",
+                                    elem[0], elem[1]);
+                        }
                     }
                 } catch(IOException ioe){}
                 return map;
