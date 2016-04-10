@@ -13,6 +13,7 @@ public class StreamPipe implements Runnable
     private final OutputStream out;
     private final int size;
     private final BiFunction<byte[], Integer, byte[]> func;
+    private Thread thread = null;
     public StreamPipe(InputStream in, OutputStream out){
         this(in, out, 1024, null);
     }
@@ -32,7 +33,13 @@ public class StreamPipe implements Runnable
     }
     
     public void start(){
-        new Thread(this).start();
+        if(this.thread == null){
+            this.thread = new Thread(this);
+            this.thread.start();
+        }
+    }
+    public boolean isAlive(){
+        return this.thread.isAlive();
     }
     
     @Override public void run(){

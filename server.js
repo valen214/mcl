@@ -4,6 +4,7 @@ var https = require("https");
 var fs = require("fs");
 var path = require("path");
 var url = require("url");
+var cprocess = require("child_process");
 
 var handler = {
     "GET": {},
@@ -139,6 +140,23 @@ function default_get(req, res){
 }
 
 function default_post(req, res, payload){
-    res.writeHead(404);
-    res.end();
+    if(payload == "pack"){
+        console.log("packing jar requested");
+        cprocess.exec("sh pack.sh",
+                (err, stdout, stderr) => {
+                    if(err){
+                        console.log(`err: ${err}`);
+                        console.log(`stderr: ${stderr}`);
+                        res.writeHead(400);
+                    } else{
+                        res.writeHead(200);
+                    }
+                    console.log(`stdout: ${stdout}`);
+                    console.log();
+                    res.end();
+        });
+    } else{
+        res.writeHead(200);
+        res.end();
+    }
 }

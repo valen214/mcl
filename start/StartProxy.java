@@ -10,6 +10,7 @@ public class StartProxy implements Runnable
 {
     static{
         System.out.println("start.StartProxy referenced");
+        // System.setProperty("https.protocols", "TLSv1.2");
     }
     public static final int PORT = 8080;
     public static final int SSL_PORT = 8081;
@@ -26,7 +27,8 @@ public class StartProxy implements Runnable
             
     public static final ServerSocket SERVER_SOCKET = ((
             java.util.function.Supplier<ServerSocket>)() ->{
-                try{ return SERVER_SOCKET_FACTORY.createServerSocket(PORT);
+                try{ return SERVER_SOCKET_FACTORY.createServerSocket(
+                        PORT, 0, InetAddress.getByName(null));
                 } catch(IOException ioe){} return null;
             }).get();
             
@@ -34,7 +36,8 @@ public class StartProxy implements Runnable
     public static final SSLServerSocket SSL_SERVER_SOCKET = ((
             java.util.function.Supplier<SSLServerSocket>)() ->{
                 try{ return (SSLServerSocket)
-                SSL_SERVER_SOCKET_FACTORY.createServerSocket(SSL_PORT);
+                SSL_SERVER_SOCKET_FACTORY.createServerSocket(
+                        SSL_PORT, 0, InetAddress.getByName(null));
                 } catch(IOException ioe){} return null;
             }).get();
             
@@ -51,6 +54,7 @@ public class StartProxy implements Runnable
                 SSL_SERVER_SOCKET.getLocalSocketAddress());
         System.out.println("address: " +
                 SERVER_SOCKET.getInetAddress());
+        // SSL_SERVER_SOCKET.setSocketFactory(SSL_SOCKET_FACTORY);
     }
     
     public static final Proxy PROXY = new Proxy(Proxy.Type.HTTP, ADDRESS);
@@ -131,24 +135,48 @@ public class StartProxy implements Runnable
             }
             
             System.out.printf("uri identified: %s:%d\n", host, port);
-            SSLSocket channel = (SSLSocket)
-                    SSL_SOCKET_FACTORY.createSocket(s, host, port, true);
-            System.out.println("channel: " + channel);
-            /*
-            System.out.println(String.join(" ",
-                    channel.getEnabledCipherSuites()));
-            */
-            System.out.println(SSL_SERVER_SOCKET
-                    .getEnableSessionCreation());
-            channel.setUseClientMode(true);
-            try(InputStream in_ser = channel.getInputStream();
-                    OutputStream out_ser = channel.getOutputStream()){
-                while(( read = in_ser.read(buffer) ) >= 0){
-                    System.out.println(new String(buffer, 0, read));
+            
+            Console.RESTRICT = false;
+            if("launchermeta.mojang.com".equals(host)){
+                out.write(("HTTP/1.1 200 Connection Established\r\n" +
+                        "\r\n").getBytes());
+                SSLSocket channel = (SSLSocket)
+                        SSL_SOCKET_FACTORY.createSocket(host, port);
+                System.out.println("socket created: " + channel);
+                try(InputStream in_ser = channel.getInputStream();
+                        OutputStream out_ser = channel.getOutputStream()){
+                    /*
+                    out_ser.write(("CONNECT / HTTP/1.1\r\n" +
+                            "Host: " + host + "\r\n" +
+                            "User-Agent: Java/1.8.0_77\r\n" +
+                            "Connection: keep-alive\r\n\r\n").getBytes());
+                    out_ser.flush();
+                    while(( read = in_ser.read(buffer) ) >= 0){
+                        System.out.println("server: " +
+                                new String(buffer, 0, read));
+                    }
+                    */
+                    StreamPipe sp1 = new StreamPipe(
+                            in, out_ser, 1024, (buffer1, read1) ->{
+                        System.out.print("client: ");
+                        System.out.println(new String(buffer1, 0, read1));
+                        return buffer1;
+                    });
+                    StreamPipe sp2 = new StreamPipe(
+                            in_ser, out, 1024, (buffer1, read1) ->{
+                        System.out.print("server: ");
+                        System.out.println(new String(buffer1, 0, read1));
+                        return buffer1;
+                    });
+                    sp1.start();
+                    sp2.start();
+                    while(sp1.isAlive() || sp2.isAlive()){
+                        try{
+                            Thread.sleep(1000);
+                        } catch(InterruptedException ie){}
+                    }
                 }
             }
-            // channel.startHandshake();
-            
             
         } catch(Exception e){
             e.printStackTrace();

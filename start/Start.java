@@ -332,38 +332,38 @@ public class Start implements Thread.UncaughtExceptionHandler
             e.printStackTrace();
         }
         
-        /*
+        //*
         try{
             Class<?> c = null;
             // session service modification
             c = cl.loadClass("com.mojang.authlib.yggdrasil" +
                     ".YggdrasilMinecraftSessionService");
             // "https://sessionserver.mojang.com/session/minecraft/";
-            Start.setStaticFieldValue(c, "BASE_URL", Start.CUSTOM_URL);
+            Start.setStaticFieldValue(c, "BASE_URL", CUSTOM_URL_STRING);
             Start.setStaticFieldValue(c, "JOIN_URL",
-                    new URL(Start.CUSTOM_URL + "join"));
-            Start.setStaticFieldValue(c, "CHECK_URL",
-                    new URL(Start.CUSTOM_URL + "hasJoined"));
+                    new URL(CUSTOM_URL_STRING + "join"));
+            setStaticFieldValue(c, "CHECK_URL",
+                    new URL(CUSTOM_URL_STRING + "hasJoined"));
             // authlib modification
             c = cl.loadClass("com.mojang.authlib.yggdrasil" +
                     ".YggdrasilUserAuthentication");
             // "https://authserver.mojang.com/"
-            Start.setStaticFieldValue(c, "BASE_URL", Start.CUSTOM_URL);
-            Start.setStaticFieldValue(c, "ROUTE_AUTHENTICATE",
-                    new URL(Start.CUSTOM_URL + "authenticate"));
-            Start.setStaticFieldValue(c, "ROUTE_REFRESH",
-                    new URL(Start.CUSTOM_URL + "refresh"));
-            Start.setStaticFieldValue(c, "ROUTE_VALIDATE",
-                    new URL(Start.CUSTOM_URL + "validate"));
-            Start.setStaticFieldValue(c, "ROUTE_INVALIDATE",
-                    new URL(Start.CUSTOM_URL + "invalidate"));
-            Start.setStaticFieldValue(c, "ROUTE_SIGNOUT",
-                    new URL(Start.CUSTOM_URL + "signout"));
+            setStaticFieldValue(c, "BASE_URL", CUSTOM_URL_STRING);
+            setStaticFieldValue(c, "ROUTE_AUTHENTICATE",
+                    new URL(CUSTOM_URL_STRING + "authenticate"));
+            setStaticFieldValue(c, "ROUTE_REFRESH",
+                    new URL(CUSTOM_URL_STRING + "refresh"));
+            setStaticFieldValue(c, "ROUTE_VALIDATE",
+                    new URL(CUSTOM_URL_STRING + "validate"));
+            setStaticFieldValue(c, "ROUTE_INVALIDATE",
+                    new URL(CUSTOM_URL_STRING + "invalidate"));
+            setStaticFieldValue(c, "ROUTE_SIGNOUT",
+                    new URL(CUSTOM_URL_STRING + "signout"));
             c = cl.loadClass("com.mojang.authlib.yggdrasil" +
                     ".YggdrasilGameProfileRepository");
-            Start.setStaticFieldValue(c, "BASE_URL",
+            setStaticFieldValue(c, "BASE_URL",
                     "https://image-uploader-xvalen214x.c9users.io");
-            Start.setStaticFieldValue(c, "SEARCH_PAGE_URL",
+            setStaticFieldValue(c, "SEARCH_PAGE_URL",
                     "https://image-uploader-xvalen214x.c9users.io");
             System.out.println("have I changed anything?");
         } catch(Exception e){
@@ -381,7 +381,7 @@ public class Start implements Thread.UncaughtExceptionHandler
                 Console.remove();
             }
             /*
-            Start.setStaticFieldValue(StartProxy.class,
+            setStaticFieldValue(StartProxy.class,
                     "PROXY", java.net.Proxy.NO_PROXY);
             //*/
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
