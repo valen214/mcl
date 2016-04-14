@@ -12,7 +12,7 @@ if /I "%COMPUTERNAME%"=="ux32ln" (
     call load.bat
 )
 
-powershell -command "(new-object net.webclient).uploadstring('https://mcl-xvalen214x.c9users.io', 'pack')"
+powershell -command "$output = (new-object net.webclient).uploadstring('https://mcl-xvalen214x.c9users.io/command', 'pack') ; echo $output ; if (-not $output -eq '') {exit 1}"
 if ERRORLEVEL 1 (
     echo error occur in packing jar
     timeout /t 5
@@ -50,5 +50,3 @@ if not exist %cfg% (
 
 echo start jar
 java -jar %root%Start.jar
-
-timeout /t 5

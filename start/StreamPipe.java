@@ -38,6 +38,9 @@ public class StreamPipe implements Runnable
             this.thread.start();
         }
     }
+    public void sync(){
+        this.run();
+    }
     public boolean isAlive(){
         return this.thread.isAlive();
     }
@@ -48,6 +51,7 @@ public class StreamPipe implements Runnable
         try{
             while(( read = this.in.read(buffer) ) >= 0){
                 this.out.write(this.func.apply(buffer, read));
+                this.out.flush();
             }
         } catch(IOException ioe){
             ioe.printStackTrace();

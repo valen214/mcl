@@ -105,53 +105,53 @@ implements java.awt.event.WindowListener
 //* PrintStream
     @Override public PrintStream printf(
             String format, Object... args){
-        if(RESTRICT && !ALLOWED.contains(
-                Thread.currentThread())) return this;
-        (isErr ? ERR : OUT).printf(format, args);
-        if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
         if(DEBUG){
             if(isErr && LOG_ERR != null) LOG_ERR.printf(format, args);
             else if(!isErr && LOG != null) LOG.printf(format, args);
         }
+        if(RESTRICT && !ALLOWED.contains(
+                Thread.currentThread())) return this;
+        (isErr ? ERR : OUT).printf(format, args);
+        if(TEXT.isDisplayable()) TEXT.append(String.format(format, args));
         return this;
     }
     // primary methods are print(String) and println()
     // avoided super to prevent unpredicted behaviour
     @Override public void print(String s){
-        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
-        (isErr ? ERR : OUT).print(s);
-        if(TEXT.isDisplayable()) TEXT.append(s);
         if(DEBUG){
             if(isErr && LOG_ERR != null) LOG_ERR.print(s);
             else if(!isErr && LOG != null) LOG.print(s);
         }
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print(s);
+        if(TEXT.isDisplayable()) TEXT.append(s);
     }
     @Override public void println(){
-        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
-        (isErr ? ERR : OUT).println();
-        if(TEXT.isDisplayable()) TEXT.append("\n");
         if(DEBUG){
             if(isErr && LOG_ERR != null) LOG_ERR.println();
             else if(!isErr && LOG != null) LOG.println();
         }
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).println();
+        if(TEXT.isDisplayable()) TEXT.append("\n");
     }
     @Override public void println(Object obj){
-        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
-        (isErr ? ERR : OUT).print("" + obj + "\n");
-        if(TEXT.isDisplayable()) TEXT.append("" + obj + "\n");
         if(DEBUG){
             if(isErr && LOG_ERR != null) LOG_ERR.print(obj);
             else if(!isErr && LOG != null) LOG.print(obj);
         }
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print("" + obj + "\n");
+        if(TEXT.isDisplayable()) TEXT.append("" + obj + "\n");
     }
     @Override public void println(String ln){
-        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
-        (isErr ? ERR : OUT).print(ln + "\n");
-        if(TEXT.isDisplayable()) TEXT.append(ln + "\n");
         if(DEBUG){
             if(isErr && LOG_ERR != null) LOG_ERR.println(ln);
             else if(!isErr && LOG != null) LOG.println(ln);
         }
+        if(RESTRICT && !ALLOWED.contains(Thread.currentThread())) return;
+        (isErr ? ERR : OUT).print(ln + "\n");
+        if(TEXT.isDisplayable()) TEXT.append(ln + "\n");
     }
     /* OutputStream
     @Override public synchronized void write(int b){
@@ -169,7 +169,7 @@ implements java.awt.event.WindowListener
 
     private final boolean isErr;
     public Console(PrintStream ps, boolean isErr){
-        super(LOG == null ? EMPTY : LOG, true);
+        super(EMPTY, true);
         this.isErr = isErr;
     }
 }

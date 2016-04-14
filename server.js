@@ -46,7 +46,39 @@ handler["HEAD"] = {
     }
 };
 handler["POST"] = {
-    "/": default_post
+    "/": default_post,
+    "/command": function(req, res, payload){
+        if(payload == "pack"){
+            console.log("packing jar requested");
+            cprocess.exec("sh pack.sh",
+                    (err, stdout, stderr) => {
+                        if(err){
+                            console.log(`err: ${err}`);
+                        }
+                        console.log(`stdout: ${stdout}`);
+                        console.log();
+                        res.writeHead(200);
+                        res.end(err ? stderr : "");
+            });
+        } else{
+            res.writeHead(200);
+            res.end();
+        }
+    },
+    "/push": function(req, res, payload){
+        console.log("git add .");
+        cprocess.exec("git add .", (err, stdout, stderr) => {
+        if(!err){
+        console.log(stdout);
+        console.log("git commit -m " + payload);
+        cprocess.exec("git commit -m " + payload, (err, stdout, stderr) => {
+        if(!err){
+        console.log(stdout);
+        console.log("git push");
+        cprocess.exec("git push", (err, stdout, stderr) => {
+        if(!err) console.log(stdout); 
+        });}});}});
+    }
 };
 handler["CONNECT"] = {
     "/": function(req, res){
@@ -140,23 +172,6 @@ function default_get(req, res){
 }
 
 function default_post(req, res, payload){
-    if(payload == "pack"){
-        console.log("packing jar requested");
-        cprocess.exec("sh pack.sh",
-                (err, stdout, stderr) => {
-                    if(err){
-                        console.log(`err: ${err}`);
-                        console.log(`stderr: ${stderr}`);
-                        res.writeHead(400);
-                    } else{
-                        res.writeHead(200);
-                    }
-                    console.log(`stdout: ${stdout}`);
-                    console.log();
-                    res.end();
-        });
-    } else{
-        res.writeHead(200);
-        res.end();
-    }
+    res.writeHead(200);
+    res.end();
 }

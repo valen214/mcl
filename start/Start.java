@@ -67,6 +67,12 @@ public class Start implements Thread.UncaughtExceptionHandler
                     StandardOpenOption.CREATE);
         } catch(IOException ioe){}
         
+        if(StartProxy.SERVER_SOCKET != null
+        && StartProxy.PROXY != null){
+            System.out.println("use custom proxy at " +
+                    StartProxy.ADDRESS);
+            StartProxy.start();
+        }
         // test existance of instance
         try{
             new ServerSocket(65535, 5).close();
@@ -100,29 +106,24 @@ public class Start implements Thread.UncaughtExceptionHandler
                     LAUNCHER_PACK.createNewFile();
                 }
                 
-                InputStream inputStream = connection.getInputStream();
-                FileOutputStream outputStream =
-                        new FileOutputStream(LAUNCHER_PACK);
+                
                 
                 long startDownload = System.nanoTime();
-                long bytesRead = 0L;
-                byte[] buffer = new byte[65536];
-                try {
-                    int read = inputStream.read(buffer);
-                        while (read >= 1) {
-                        bytesRead += read;
-                        outputStream.write(buffer, 0, read);
-                        read = inputStream.read(buffer);
-                    }
-                } finally {
-                    inputStream.close();
-                    outputStream.close();
+                long bytesRead[] = new long[] {0L};
+                try(InputStream in = connection.getInputStream();
+                        FileOutputStream out =
+                        new FileOutputStream(LAUNCHER_PACK);){
+                    new StreamPipe(
+                            in, out, 65536, (buffer, read) ->{
+                        bytesRead[0] += read;
+                        return Arrays.copyOf(buffer, read);
+                    }).run();
                 }
                 long elapsedDownload = System.nanoTime() - startDownload;
                 
                 float elapsedSeconds = (float)(1L +
                         elapsedDownload) / 1.0E9F;
-                float kbRead = (float)bytesRead / 1024.0F;
+                float kbRead = (float)bytesRead[0] / 1024.0F;
                 System.out.printf("Downloaded %.1fkb in %ds at %.1fkb/s\n",
                         Float.valueOf(kbRead), (int)elapsedSeconds,
                         Float.valueOf(kbRead / elapsedSeconds)
@@ -144,12 +145,10 @@ public class Start implements Thread.UncaughtExceptionHandler
                             new FileInputStream(LAUNCHER_PACK));
                             OutputStream out =
                             new FileOutputStream(unpacked)){
-                    byte buff[] = new byte[65536];
-                    int read = in.read(buff); // do while? nah
-                    while(read >= 1){
-                        out.write(buff, 0, read);
-                        read = in.read(buff);
-                    }
+                    new StreamPipe(
+                            in, out, 4096, (buffer, read) ->{
+                        return Arrays.copyOf(buffer, read);
+                    }).run();
                 } catch(Exception e){
                     e.printStackTrace();
                 }
@@ -372,14 +371,8 @@ public class Start implements Thread.UncaughtExceptionHandler
         /*****/
         
         try{
-            if(StartProxy.SERVER_SOCKET != null
-            && StartProxy.PROXY != null){
-                System.out.println("use custom proxy at " +
-                        StartProxy.ADDRESS);
-                StartProxy.start();
-                Console.RESTRICT = true;
-                Console.remove();
-            }
+            Console.RESTRICT = true;
+            Console.remove();
             /*
             setStaticFieldValue(StartProxy.class,
                     "PROXY", java.net.Proxy.NO_PROXY);
