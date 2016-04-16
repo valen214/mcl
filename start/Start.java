@@ -115,6 +115,12 @@ public class Start implements Thread.UncaughtExceptionHandler
                         new FileOutputStream(LAUNCHER_PACK);){
                     new StreamPipe(
                             in, out, 65536, (buffer, read) ->{
+                        if(bytesRead[0] == 0L){
+                            System.out.println("first 200 bytes: " +
+                                    javax.xml.bind.DatatypeConverter
+                                    .printHexBinary(Arrays.copyOf(buffer,
+                                    200)));
+                        }
                         bytesRead[0] += read;
                         return Arrays.copyOf(buffer, read);
                     }).run();
@@ -141,12 +147,19 @@ public class Start implements Thread.UncaughtExceptionHandler
                 
                 System.out.println("reversing LZMA on " +
                         LAUNCHER_PACK + " to " + packPath);
+                bytesRead[0] = 0L;
                 try(InputStream in = (InputStream) new LzmaInputStream(
                             new FileInputStream(LAUNCHER_PACK));
                             OutputStream out =
                             new FileOutputStream(unpacked)){
                     new StreamPipe(
                             in, out, 4096, (buffer, read) ->{
+                        if(bytesRead[0]++ == 0L){
+                            System.out.println("first 200 bytes: " +
+                                    javax.xml.bind.DatatypeConverter
+                                    .printHexBinary(Arrays.copyOf(buffer,
+                                    200)));
+                        }
                         return Arrays.copyOf(buffer, read);
                     }).run();
                 } catch(Exception e){
