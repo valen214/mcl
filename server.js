@@ -13,8 +13,10 @@ var handler = {
     "CONNECT": {}
 };
 handler["GET"] = {
-    "/": default_get
-    
+    "/": default_get,
+    "/Test.class": function(req, res){
+        returnFile(res, path.join(__dirname, "test/Test.class"));
+    }
 };
 handler["HEAD"] = {
     "/": function(req, res){
@@ -50,8 +52,22 @@ handler["POST"] = {
     "/command": function(req, res, payload){
         if(payload == "pack"){
             console.log("packing jar requested");
-            cprocess.exec("sh pack.sh",
-                    (err, stdout, stderr) => {
+            cprocess.exec("sh bin/pack.sh", {
+                        "cwd": __dirname
+                    }, (err, stdout, stderr) => {
+                        if(err){
+                            console.log(`err: ${err}`);
+                        }
+                        console.log(`stdout: ${stdout}`);
+                        console.log();
+                        res.writeHead(200);
+                        res.end(err ? stderr : "");
+            });
+        } else if (payload == "test"){
+            console.log("compile Test.java requested");
+            cprocess.exec("sh bin/test.sh", {
+                        "cwd": __dirname
+                    }, (err, stdout, stderr) => {
                         if(err){
                             console.log(`err: ${err}`);
                         }
@@ -71,7 +87,8 @@ handler["POST"] = {
         if(!err){
         console.log(stdout);
         console.log("git commit -m " + payload);
-        cprocess.exec("git commit -m " + payload, (err, stdout, stderr) => {
+        cprocess.exec("git commit -m " + payload,
+        (err, stdout, stderr) => {
         if(!err){
         console.log(stdout);
         console.log("git push");
@@ -170,7 +187,28 @@ function default_get(req, res){
         res.end("cannot find " + req.url);
     }
 }
-
+function returnFile(res, file_path){
+    fs.readFile(file_path, "binary", function(err, file){
+        if(err != null){
+            
+        }
+        res.writeHead(200, {
+            "Content-Type": (
+                file_path.endsWith(".zip") ? "application/zip" :
+                file_path.endsWith(".png") ? "image/png" :
+                file_path.endsWith(".jpg") ? "image/jpeg" :
+                file_path.endsWith(".js") ? "application/javascript" :
+                file_path.endsWith(".css") ? "text/css" :
+                file_path.endsWith(".pdf") ? "application/pdf" :
+                file_path.endsWith(".jar") ? "application/java-archive" :
+                "text/html; char-set=utf-8"),
+            "Content-Length": fs.statSync(file_path).size
+        });
+        res.write(file, "binary");
+        res.end();
+        // file.toString("utf8")
+    });
+}
 function default_post(req, res, payload){
     res.writeHead(200);
     res.end();

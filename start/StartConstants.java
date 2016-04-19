@@ -25,7 +25,7 @@ public class StartConstants
             }).get();
     
     public static final String CUSTOM_URL_STRING =
-            "https://image-uploader-xvalen214x.c9users.io/";
+            "https://mcl-xvalen214x.c9users.io/";
     
     //this
     public static final URL LOCATION_URL =

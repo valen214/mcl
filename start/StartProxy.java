@@ -9,8 +9,9 @@ import javax.net.ssl.*;
 
 public class StartProxy implements Runnable
 {
+    public static final Console CONSOLE = new Console("StartProxy");
     static{
-        System.out.println("start.StartProxy referenced");
+        CONSOLE.println("start.StartProxy referenced");
         // System.setProperty("javax.net.debug", "all");
         System.setProperty("https.protocols",
                 "TLSv1.2,TLSv1.1,TLSv1,SSLv3");
@@ -53,11 +54,11 @@ public class StartProxy implements Runnable
             SSL_SERVER_SOCKET.getLocalSocketAddress() : null);
     
     static{
-        System.out.println("SERVER_SOCKET address: " +
+        CONSOLE.println("SERVER_SOCKET address: " +
                 SERVER_SOCKET.getLocalSocketAddress());
-        System.out.println("SSL_SERVER_SOCKET address: " +
+        CONSOLE.println("SSL_SERVER_SOCKET address: " +
                 SSL_SERVER_SOCKET.getLocalSocketAddress());
-        System.out.println("address: " +
+        CONSOLE.println("address: " +
                 SERVER_SOCKET.getInetAddress());
         // SSL_SERVER_SOCKET.setSocketFactory(SSL_SOCKET_FACTORY);
     }
@@ -78,29 +79,33 @@ public class StartProxy implements Runnable
         this.ss = ss;
     }
     @Override public void run(){
-        Console.allow();
-        System.out.println("server socket listening for new request");
+        CONSOLE.println("server socket listening for new request");
         try(Socket s = this.ss.accept();
                 InputStream in = s.getInputStream();
                 OutputStream out = s.getOutputStream()){
-            System.out.println("-----     -----");
-            System.out.println("request received " + s);
+            CONSOLE.println("-----     -----");
+            CONSOLE.println("request received " + s);
             new Thread(this).start();
             
-            int read;
-            byte buffer[] = new byte[1024];
-            StringBuilder req = new StringBuilder();
-            try{
+            ByteArrayOutputStream req = new ByteArrayOutputStream();
+            {
+                int read;
+                byte buffer[] = new byte[1024];
                 while(!req.toString().endsWith("\r\n\r\n")
-                && ( read = in.read(buffer) ) >= 0){
-                    req.append(new String(buffer, 0, read));
+                && (read = in.read(buffer)) >= 0){
+                    req.write(buffer, 0, read);
                 }
-            } catch(IOException ioe){
-                ioe.printStackTrace();
             }
             
             String lines[] = req.toString().split("\\r?\\n");
             
+            CONSOLE.println("client(1st line): " + lines[0]);
+            if(!lines[0].contains(" ")){
+                CONSOLE.println(req.toString().endsWith("\r\n\r\n"));
+                CONSOLE.print("invalid request: ");
+                CONSOLE.println(javax.xml.bind.DatatypeConverter
+                        .printHexBinary(lines[0].getBytes()));
+            }
             String uri = lines[0].split(" ", 3)[1];
             String host = null;
             int port = 80;
@@ -137,37 +142,36 @@ public class StartProxy implements Runnable
                 // out.write("HTTP/1.1 501 Not Implemented");
             }
             
-            if(host.startsWith("http://resources.download.minecraft.net")){
-                System.out.println("client(1st line): " + lines[0]);
-            } else{
-                System.out.print("client: ");
-                System.out.println(String.join("\nclient: ", lines));
+            if(!host.startsWith("http://resources.download.minecraft.net")){
+                CONSOLE.print("client: ");
+                CONSOLE.println(String.join("\nclient: ",
+                        Arrays.copyOfRange(lines, 1, lines.length)));
             }
             
-            System.out.printf("uri identified: %s:%d\n", host, port);
+            CONSOLE.printf("uri identified: %s:%d\n", host, port);
             
-            Console.RESTRICT = false;
             if(lines[0].startsWith("CONNECT")){
                 try(Socket channel = new Socket(
                         InetAddress.getByName(host), port);
                         InputStream in_ser = channel.getInputStream();
                         OutputStream out_ser = channel.getOutputStream();){
                     
-                    System.out.println("socket created: " + channel);
+                    CONSOLE.println("socket created: " + channel);
                     out.write(("HTTP/1.1 200 Connection Established\r\n" +
                             "\r\n").getBytes());
                     out.flush();
                     
                     StreamPipe sp1 = new StreamPipe(
-                            in, out_ser, 4096, (buffer1, read1) ->{
-                        return Arrays.copyOf(buffer1, read1);
+                            in, out_ser, 4096, (buffer, read) ->{
+                        return Arrays.copyOf(buffer, read);
                     });
                     StreamPipe sp2 = new StreamPipe(
-                            in_ser, out, 4096, (buffer1, read1) ->{
-                        return Arrays.copyOf(buffer1, read1);
+                            in_ser, out, 4096, (buffer, read) ->{
+                        return Arrays.copyOf(buffer, read);
                     });
-                    sp2.start();
                     sp1.start();
+                    sp2.start();
+                    /*
                     while(sp1.isAlive() || sp2.isAlive()){
                         try{
                             Thread.sleep(1000);
@@ -175,24 +179,27 @@ public class StartProxy implements Runnable
                             ie.printStackTrace();
                         }
                     }
+                    */
+                    sp1.join();
+                    if(sp1.isAlive() || sp2.isAlive()){
+                        CONSOLE.println("unexpected end of thread");
+                        CONSOLE.println("*****");
+                    }
                 }
             } else if(lines[0].startsWith("GET")){
                 URLConnection con = new URL(uri).openConnection();
                 InputStream in_ser = con.getInputStream();
                 out.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
-                while(( read = in_ser.read(buffer) ) >= 0){
-                    out.write(buffer, 0, read);
-                }
+                new StreamPipe(in_ser, out, 1024).run();
                 in_ser.close();
             } else{
-                System.out.println("unsupported http method");
-                System.out.println(lines[0]);
+                CONSOLE.println("unsupported http method");
+                CONSOLE.println(lines[0]);
             }
             
         } catch(Exception e){
             e.printStackTrace();
         }
-        System.out.println("request ended");
-        Console.remove();
+        CONSOLE.println("request ended");
     }
 }

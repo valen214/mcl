@@ -44,6 +44,9 @@ public class StreamPipe implements Runnable
     public boolean isAlive(){
         return this.thread.isAlive();
     }
+    public void join() throws InterruptedException{
+        this.thread.join();
+    }
     
     @Override public void run(){
         int read;

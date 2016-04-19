@@ -14,7 +14,9 @@ import javax.net.ssl.*;
 
 import LZMA.*;
 
-public class Start implements Thread.UncaughtExceptionHandler
+public class Start implements
+        Thread.UncaughtExceptionHandler,
+        java.awt.event.WindowListener
 {
     // profile related
 	public static final String[] UUID = new String[] {
@@ -41,7 +43,6 @@ public class Start implements Thread.UncaughtExceptionHandler
 	static{
 	    System.out.println("start.Start referenced");
 	    Thread.currentThread().setUncaughtExceptionHandler(THIS);
-	    Console.RESTRICT = false;
 	}
 	public void uncaughtException(Thread t, Throwable e){
 	    e.printStackTrace();
@@ -291,6 +292,7 @@ public class Start implements Thread.UncaughtExceptionHandler
             JFrame frm, File data_dir){
         String name = getName(data_dir);
         
+        Thread.currentThread().setContextClassLoader(cl);
         Class<?> constants = null;
         try{
             constants = cl.loadClass(
@@ -384,8 +386,6 @@ public class Start implements Thread.UncaughtExceptionHandler
         /*****/
         
         try{
-            Console.RESTRICT = true;
-            Console.remove();
             /*
             setStaticFieldValue(StartProxy.class,
                     "PROXY", java.net.Proxy.NO_PROXY);
@@ -398,13 +398,11 @@ public class Start implements Thread.UncaughtExceptionHandler
                     constants.getField("SUPER_COOL_BOOTSTRAP_VERSION"
                     ).getInt(null));
         } catch(Exception e){
-            Console.allow();
             System.out.println("Unable to start: ");
             e.printStackTrace();
             e.fillInStackTrace().printStackTrace();
             exit();
         }
-        Console.allow();
         System.out.println("launcher started");
     }
     public static void setStaticFieldValue(
@@ -425,6 +423,21 @@ public class Start implements Thread.UncaughtExceptionHandler
             e.printStackTrace();
         }
     }
+    
+/**
+ * java.awt.event.WindowListener
+ */
+    @Override public void windowActivated(java.awt.event.WindowEvent we){}
+    @Override public void windowClosed(java.awt.event.WindowEvent we){}
+    @Override public void windowClosing(java.awt.event.WindowEvent we){
+        exit();
+    }
+    @Override public void windowDeactivated(
+                java.awt.event.WindowEvent we){}
+    @Override public void windowDeiconified(
+                java.awt.event.WindowEvent we){}
+    @Override public void windowIconified(java.awt.event.WindowEvent we){}
+    @Override public void windowOpened(java.awt.event.WindowEvent we){}
     
     private static void exit(){
         System.out.println("programme exit");

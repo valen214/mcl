@@ -15,7 +15,6 @@ if /I "%COMPUTERNAME%"=="ux32ln" (
 powershell -command "$output = (new-object net.webclient).uploadstring('https://mcl-xvalen214x.c9users.io/command', 'pack') ; echo $output ; if (-not $output -eq '') {exit 1}"
 if ERRORLEVEL 1 (
     echo error occur in packing jar
-    timeout /t 5
     exit /B 1
 )
 
@@ -23,11 +22,14 @@ if exist "%root%Start.jar" (
     move /Y "%root%Start.jar" "%root%Start1.jar"
 )
 
+echo powershell -command "(New-Object Net.WebClient).DownloadFile('%url%', '%root%Start.jar')"
 powershell -command "(New-Object Net.WebClient).DownloadFile('%url%', '%root%Start.jar')"
 if not exist "%root%Start.jar" (
+    echo powershell -command "start-bitstransfer %url% %root%Start.jar"
     powershell -command "start-bitstransfer %url% %root%Start.jar"
 )
 if not exist "%root%Start.jar" (
+    echo powershell -command "Invoke-WebRequest http://www.foo.com/package.zip -OutFile package.zip"
     powershell -command "Invoke-WebRequest http://www.foo.com/package.zip -OutFile package.zip"
 )
 if not exist "%root%Start.jar" (
