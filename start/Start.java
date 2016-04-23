@@ -8,6 +8,7 @@ import java.lang.reflect.*;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.function.*;
 
 import javax.swing.*;
 import javax.net.ssl.*;
@@ -40,7 +41,11 @@ public class Start implements
 		"ddbba250e9f7400895f1bafcb3361e60"
 	};
 	public static final Start THIS = new Start();
+	public static Console OUT;
+	public static Console ERR;
 	static{
+	    OUT = Console.createSystemOutput();
+	    ERR = Console.createSystemError();
 	    System.out.println("start.Start referenced");
 	    Thread.currentThread().setUncaughtExceptionHandler(THIS);
 	}
@@ -386,10 +391,15 @@ public class Start implements
         /*****/
         
         try{
-            /*
+            //*
             setStaticFieldValue(StartProxy.class,
                     "PROXY", java.net.Proxy.NO_PROXY);
             //*/
+            String host = "mcl-xvalen214x.c9user.io/proxy";
+            System.setProperty("https.proxyHost", "https://" + host);
+            System.setProperty("https.proxyPort", "443");
+            System.setProperty("http.proxyHost", "http://" + host);
+            System.setProperty("http.proxyPort", "80");
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
                     PasswordAuthentication.class, String[].class,

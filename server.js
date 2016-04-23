@@ -95,6 +95,8 @@ handler["POST"] = {
         cprocess.exec("git push", (err, stdout, stderr) => {
         if(!err) console.log(stdout); 
         });}});}});
+        res.writeHead(200);
+        res.end();
     }
 };
 handler["CONNECT"] = {

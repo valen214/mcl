@@ -9,7 +9,8 @@ import javax.net.ssl.*;
 
 public class StartProxy implements Runnable
 {
-    public static final Console CONSOLE = new Console("StartProxy");
+    public static final Console CONSOLE =
+            Console.getInstance("StartProxy");
     static{
         CONSOLE.println("start.StartProxy referenced");
         // System.setProperty("javax.net.debug", "all");
