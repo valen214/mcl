@@ -3,8 +3,10 @@ package start;
 
 import static start.StartConstants.*;
 
+import java.awt.Font;
 import java.io.*;
-import java.lang.reflect.*;
+import java.lang.reflect.Method;
+import java.lang.reflect.Field;
 import java.net.*;
 import java.nio.file.*;
 import java.util.*;
@@ -40,12 +42,21 @@ public class Start implements
 		"aabd49d956d74f4da4eb22b6821fdf85",
 		"ddbba250e9f7400895f1bafcb3361e60"
 	};
+    private static final Font MONOSPACED = new Font("Monospaced", 0, 12);
+	public static JFrame FRAME = new JFrame("Start");
 	public static final Start THIS = new Start();
 	public static Console OUT;
 	public static Console ERR;
 	static{
-	    OUT = Console.createSystemOutput();
-	    ERR = Console.createSystemError();
+        FRAME.setSize(900, 580);
+        
+        FRAME.setFont(MONOSPACED);
+        FRAME.setLocationRelativeTo(null);
+        FRAME.setVisible(true);
+        
+	    OUT = Console.createSystemOut();
+	    ERR = Console.createSystemErr();
+	    URL.setURLStreamHandlerFactory(CustomURLStreamHandler.FACTORY);
 	    System.out.println("start.Start referenced");
 	    Thread.currentThread().setUncaughtExceptionHandler(THIS);
 	}
@@ -239,7 +250,7 @@ public class Start implements
                 URLClassLoader cl = new URLClassLoader(new URL[] {
                         LAUNCHER_JAR.toURI().toURL()
                 });
-                Start.start(cl, Console.FRAME, DATA_DIRECTORY);
+                Start.start(cl, FRAME, DATA_DIRECTORY);
             } catch(Exception e){
                 e.printStackTrace();
             }
@@ -380,10 +391,8 @@ public class Start implements
                     new URL(CUSTOM_URL_STRING + "signout"));
             c = cl.loadClass("com.mojang.authlib.yggdrasil" +
                     ".YggdrasilGameProfileRepository");
-            setStaticFieldValue(c, "BASE_URL",
-                    "https://image-uploader-xvalen214x.c9users.io");
-            setStaticFieldValue(c, "SEARCH_PAGE_URL",
-                    "https://image-uploader-xvalen214x.c9users.io");
+            setStaticFieldValue(c, "BASE_URL", CUSTOM_URL_STRING);
+            setStaticFieldValue(c, "SEARCH_PAGE_URL", CUSTOM_URL_STRING);
             System.out.println("have I changed anything?");
         } catch(Exception e){
             e.printStackTrace();
@@ -391,26 +400,31 @@ public class Start implements
         /*****/
         
         try{
-            //*
-            setStaticFieldValue(StartProxy.class,
-                    "PROXY", java.net.Proxy.NO_PROXY);
+            String host = "proxy-xvalen214x.c9users.io";
+            /*
+            setStaticFieldValue(StartProxy.class, "PROXY",
+                    new Proxy(Proxy.Type.HTTP, new InetSocketAddress(
+                            InetAddress.getByName(host), 80)));
             //*/
-            String host = "mcl-xvalen214x.c9user.io/proxy";
+            Proxy proxy = 
+            /*
+            StartProxy.PROXY;/*/
+            new Proxy(Proxy.Type.HTTP,
+                    new InetSocketAddress(host, 8080)); //*/
             System.setProperty("https.proxyHost", "https://" + host);
-            System.setProperty("https.proxyPort", "443");
+            System.setProperty("https.proxyPort", "8080");
             System.setProperty("http.proxyHost", "http://" + host);
-            System.setProperty("http.proxyPort", "80");
+            System.setProperty("http.proxyPort", "8080");
             cl.loadClass("net.minecraft.launcher.Launcher").getConstructor(
                     JFrame.class, File.class, java.net.Proxy.class,
                     PasswordAuthentication.class, String[].class,
                     Integer.class).newInstance(frm, data_dir,
-                    StartProxy.PROXY, null, new String[0],
+                    proxy, null, new String[0],
                     constants.getField("SUPER_COOL_BOOTSTRAP_VERSION"
                     ).getInt(null));
         } catch(Exception e){
             System.out.println("Unable to start: ");
             e.printStackTrace();
-            e.fillInStackTrace().printStackTrace();
             exit();
         }
         System.out.println("launcher started");
@@ -451,7 +465,6 @@ public class Start implements
     
     private static void exit(){
         System.out.println("programme exit");
-        if(Console.FRAME != null) Console.FRAME.dispose();
         if(StartProxy.SERVER_SOCKET != null) try{
             StartProxy.SERVER_SOCKET.close();
         } catch(IOException ioe){}

@@ -1,5 +1,5 @@
 
-package start;
+package test;
 
 import java.io.*;
 import java.net.*;
@@ -7,12 +7,14 @@ import java.util.Arrays;
 import javax.net.*;
 import javax.net.ssl.*;
 
-public class StartProxy implements Runnable
+import start.*;
+
+public class Test implements Runnable
 {
-    public static final Console CONSOLE =
-            Console.getInstance("StartProxy");
+    public static final start.Console CONSOLE =
+            start.Console.createSystemOut();
     static{
-        CONSOLE.println("start.StartProxy referenced");
+        CONSOLE.println("Test referenced");
         // System.setProperty("javax.net.debug", "all");
         System.setProperty("https.protocols",
                 "TLSv1.2,TLSv1.1,TLSv1,SSLv3");
@@ -69,14 +71,14 @@ public class StartProxy implements Runnable
     private static boolean RUNNING = false;
     public static void start(){
         if(!RUNNING){
-            new Thread(new StartProxy(SERVER_SOCKET)).start();
-            // new Thread(new StartProxy(SSL_SERVER_SOCKET)).start();
+            new Thread(new Test(SERVER_SOCKET)).start();
+            // new Thread(new Test(SSL_SERVER_SOCKET)).start();
             RUNNING = true;
         }
     }
     
     private final ServerSocket ss;
-    public StartProxy(ServerSocket ss){
+    public Test(ServerSocket ss){
         this.ss = ss;
     }
     @Override public void run(){
@@ -106,9 +108,6 @@ public class StartProxy implements Runnable
                 CONSOLE.print("invalid request: ");
                 CONSOLE.println(javax.xml.bind.DatatypeConverter
                         .printHexBinary(lines[0].getBytes()));
-                out.write("HTTP/1.1 200 OK\r\n\r\n".getBytes());
-                CONSOLE.println("request end");
-                return;
             }
             String uri = lines[0].split(" ", 3)[1];
             String host = null;
@@ -187,7 +186,8 @@ public class StartProxy implements Runnable
                     sp1.join();
                     sp2.join();
                     if(sp1.isAlive() || sp2.isAlive()){
-                        CONSOLE.println("*****unexpected end*****");
+                        CONSOLE.println("unexpected end of thread");
+                        CONSOLE.println("*****");
                     }
                 }
             } else if(lines[0].startsWith("GET")){
@@ -205,5 +205,29 @@ public class StartProxy implements Runnable
             e.printStackTrace();
         }
         CONSOLE.println("request ended");
+    }
+    
+    public static void main(String args[]) throws Exception{
+        
+        if(SERVER_SOCKET != null
+        && PROXY != null){
+            System.out.println("use custom proxy at " +
+                    ADDRESS);
+            start();
+            
+            Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(
+                    "proxy-xvalen214x.c9users.io", 8080));
+            
+            URL url = new URL("https://www.google.com");
+            URLConnection con = url.openConnection(proxy);
+            InputStream in_ser = con.getInputStream();
+            new StreamPipe(in_ser, new ByteArrayOutputStream(), 1024,
+                    (buffer, read) ->{
+                        System.out.println(new String(buffer, 0, read));
+                        return Arrays.copyOf(buffer, read);
+                    }).run();
+            in_ser.close();
+        }
+        System.exit(0);
     }
 }

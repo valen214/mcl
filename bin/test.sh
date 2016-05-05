@@ -1,2 +1,3 @@
 #!/bin/sh
-javac -cp . test/*.java
+cd /home/ubuntu/workspace
+javac -cp . test/*.java start/*.java && jar cfe Test.jar test.Test start/* test/*

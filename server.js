@@ -49,6 +49,11 @@ handler["HEAD"] = {
 };
 handler["POST"] = {
     "/": default_post,
+    "/validate": function(req, res, payload){
+        console.log("payload: " + payload);
+        res.writeHead(200);
+        res.end();
+    },
     "/command": function(req, res, payload){
         if(payload == "pack"){
             console.log("packing jar requested");
@@ -115,7 +120,7 @@ handler["CONNECT"] = {
 
 
 /*****************/
-console.log("server start at %s", process.env.IP);
+console.log("server start at %s:%s", process.env.IP, process.env.PORT);
 http.createServer(function(req, res){
     var str = "";
     print_req(req);
@@ -124,12 +129,12 @@ http.createServer(function(req, res){
         if(chunk) str += chunk.toString();
     });
     req.on("end", function(){
-        var pathname = require("url").parse(req.url).pathname;
+        var pathname = url.parse(req.url).pathname;
         handler[req.method][(pathname in handler[req.method]) ?
                 pathname : "/"](req, res, str);
         // code here will be executed every time
     });
-}).listen(process.env.PORT, process.env.IP);
+}).listen(process.env.PORT || 8080, process.env.IP);
 /*****************/
 
 
