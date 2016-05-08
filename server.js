@@ -5,6 +5,7 @@ var fs = require("fs");
 var path = require("path");
 var url = require("url");
 var cprocess = require("child_process");
+var net = require("net");
 
 var handler = {
     "GET": {},
@@ -16,6 +17,9 @@ handler["GET"] = {
     "/": default_get,
     "/Test.class": function(req, res){
         returnFile(res, path.join(__dirname, "test/Test.class"));
+    },
+    "/connection": function(req, res){
+        var host = req.content;
     }
 };
 handler["HEAD"] = {
@@ -112,7 +116,7 @@ handler["CONNECT"] = {
                 "Content-Type": "text/html",
                 "Connection": "close"
         });
-        res.end();
+        // res.end();
     }
 };
 
@@ -121,7 +125,7 @@ handler["CONNECT"] = {
 
 /*****************/
 console.log("server start at %s:%s", process.env.IP, process.env.PORT);
-http.createServer(function(req, res){
+var server = http.createServer(function(req, res){
     var str = "";
     print_req(req);
     // console.log('\033[2J');
@@ -130,11 +134,30 @@ http.createServer(function(req, res){
     });
     req.on("end", function(){
         var pathname = url.parse(req.url).pathname;
-        handler[req.method][(pathname in handler[req.method]) ?
-                pathname : "/"](req, res, str);
+        if(req.method in handler){
+            handler[req.method][(pathname in handler[req.method]) ?
+                    pathname : "/"](req, res, str);
+        } else{
+            console.log("unsupported method");
+            res.writeHead(501, {"Content-Type": "text/plain"});
+            res.end("unsupported method");
+        }
         // code here will be executed every time
     });
-}).listen(process.env.PORT || 8080, process.env.IP);
+});
+server.on("connect", (req, cltSocket, head) =>{
+    console.log("connect received");
+    var srvUrl = url.parse(`http://${req.url}`);
+    var srvSocket = net.connect(srvUrl.port, srvUrl.hostname, () =>{
+        cltSocket.write('HTTP/1.1 200 Connection Established\r\n' +
+                        'Proxy-agent: Node.js-Proxy\r\n' +
+                        '\r\n');
+        srvSocket.write(head);
+        srvSocket.pipe(cltSocket);
+        cltSocket.pipe(srvSocket);
+    });
+});
+server.listen(process.env.PORT || 8080, process.env.IP);
 /*****************/
 
 

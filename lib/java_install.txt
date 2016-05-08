@@ -1,0 +1,18 @@
+
+
+Java Virtual Machine installation on Ubuntu / Debian
+
+sudo add-apt-repository ppa:webupd8team/java
+sudo apt-get update
+sudo apt-get install oracle-java8-installer
+
+install without manually accepting license:
+echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true|\
+sudo /usr/bin/debconf-set-selections
+
+switching java7 or java8:
+sudo update-java-alternatives -s java-7-oracle
+sudo update-java-alternatives -s java-8-oracle
+
+set environment variable:
+sudo apt-get install oracle-java8-set-default

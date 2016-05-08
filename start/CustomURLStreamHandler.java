@@ -40,13 +40,13 @@ implements URLStreamHandlerFactory
         return handler;
     }
     @Override public URLConnection openConnection(URL url, Proxy proxy){
-        CONSOLE.println("openConnection(" + url + ")");
+        CONSOLE.printf("openConnection(%s, %s)", url, proxy);
         URLConnection connection = null;
         assert url.getProtocol().equalsIgnoreCase(
                 this.protocol) : "wrong protocol";
         try{
             if("http".equalsIgnoreCase(this.protocol)){
-                connection = (URLConnection)Class.forName(
+                connection = (URLConnection) Class.forName(
                         "sun.net.www.protocol.http.HttpURLConnection"
                         ).getConstructor(java.net.URL.class,
                         java.net.Proxy.class).newInstance(url, proxy);
@@ -58,7 +58,7 @@ implements URLStreamHandlerFactory
                         sun.net.www.protocol.https.Handler.class);
                 constr.setAccessible(true);
                 InetSocketAddress address =
-                        (InetSocketAddress)proxy.address();
+                        (InetSocketAddress) proxy.address();
                 connection = (URLConnection) constr.newInstance(url, proxy,
                         new sun.net.www.protocol.https.Handler(
                         address.getHostString(), address.getPort()));
